@@ -1,7 +1,7 @@
 use skrifa::instance::Size;
 use skrifa::raw::types::Tag;
 use skrifa::raw::ReadError;
-use skrifa::{FontRef, GlyphId, MetadataProvider};
+use skrifa::{FontRef, MetadataProvider};
 
 #[test]
 fn test_opsz_affects_advance_width() -> Result<(), ReadError> {
@@ -23,10 +23,10 @@ fn test_opsz_affects_advance_width() -> Result<(), ReadError> {
     // Create locations at two different opsz values, both at wght=700
     let location_opsz14 = font_ref
         .axes()
-        .location(&[(Tag::new(b"wght"), 700.0), (Tag::new(b"opsz"), 14.0)]);
+        .location([(Tag::new(b"wght"), 700.0), (Tag::new(b"opsz"), 14.0)]);
     let location_opsz32 = font_ref
         .axes()
-        .location(&[(Tag::new(b"wght"), 700.0), (Tag::new(b"opsz"), 32.0)]);
+        .location([(Tag::new(b"wght"), 700.0), (Tag::new(b"opsz"), 32.0)]);
 
     let metrics_14 = font_ref.glyph_metrics(Size::unscaled(), &location_opsz14);
     let metrics_32 = font_ref.glyph_metrics(Size::unscaled(), &location_opsz32);
@@ -57,10 +57,10 @@ fn test_opsz_affects_advance_width() -> Result<(), ReadError> {
     println!("\n=== Also check at wght=400 ===");
     let location_400_14 = font_ref
         .axes()
-        .location(&[(Tag::new(b"wght"), 400.0), (Tag::new(b"opsz"), 14.0)]);
+        .location([(Tag::new(b"wght"), 400.0), (Tag::new(b"opsz"), 14.0)]);
     let location_400_32 = font_ref
         .axes()
-        .location(&[(Tag::new(b"wght"), 400.0), (Tag::new(b"opsz"), 32.0)]);
+        .location([(Tag::new(b"wght"), 400.0), (Tag::new(b"opsz"), 32.0)]);
     let metrics_400_14 = font_ref.glyph_metrics(Size::unscaled(), &location_400_14);
     let metrics_400_32 = font_ref.glyph_metrics(Size::unscaled(), &location_400_32);
 

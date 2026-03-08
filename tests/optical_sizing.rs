@@ -1,11 +1,11 @@
 use cosmic_text::{fontdb, Attrs, AttrsList, Family, FontSystem, Metrics, Shaping, Weight};
 
-/// Verify that `optical_sizing(false)` produces different advance widths than the default
-/// (`optical_sizing(true)`) for a variable font with an `opsz` axis.
+/// Verify that `optical_sizing(true)` produces different advance widths than the default
+/// (`optical_sizing(false)`) for a variable font with an `opsz` axis.
 ///
 /// Inter Variable has opsz range 14..32. At font_size=89.375, opsz is clamped to 32 (display),
-/// which produces narrower glyphs than opsz=14 (body/default). Disabling optical sizing should
-/// leave opsz at the font's default (14), yielding wider advances.
+/// which produces narrower glyphs than opsz=14 (body/default). The default (None) leaves opsz
+/// at the font's default (14), yielding wider advances.
 #[test]
 fn optical_sizing_on_vs_off() {
     let mut font_system =
@@ -18,12 +18,12 @@ fn optical_sizing_on_vs_off() {
 
     let attrs_on = Attrs::new()
         .family(Family::Name("Inter Variable"))
-        .weight(Weight::BOLD);
+        .weight(Weight::BOLD)
+        .optical_sizing(true);
 
     let attrs_off = Attrs::new()
         .family(Family::Name("Inter Variable"))
-        .weight(Weight::BOLD)
-        .optical_sizing(false);
+        .weight(Weight::BOLD);
 
     let line_on = cosmic_text::ShapeLine::new(
         &mut font_system,
@@ -106,6 +106,7 @@ fn opsz_consistent_with_per_span_metrics() {
     let attrs_with_metrics = Attrs::new()
         .family(Family::Name("Inter Variable"))
         .weight(Weight::BOLD)
+        .optical_sizing(true)
         .metrics(Metrics::new(span_size, span_size * 1.2));
 
     let line_override = cosmic_text::ShapeLine::new(
@@ -121,7 +122,8 @@ fn opsz_consistent_with_per_span_metrics() {
     // Shaping and rendering both use opsz for 89.375.
     let attrs_direct = Attrs::new()
         .family(Family::Name("Inter Variable"))
-        .weight(Weight::BOLD);
+        .weight(Weight::BOLD)
+        .optical_sizing(true);
 
     let line_direct = cosmic_text::ShapeLine::new(
         &mut font_system,
