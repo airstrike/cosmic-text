@@ -14,12 +14,12 @@ pub use fontdb::{Family, Stretch, Style, Weight};
 /// Optical size setting for variable fonts with an `opsz` axis.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum OpticalSize {
-    /// Automatically set `opsz` to match the font size (default).
-    #[default]
+    /// Automatically set `opsz` to match the font size.
     Auto,
     /// Set `opsz` to a specific value, independent of font size.
     Fixed(f32),
-    /// Disable optical sizing entirely.
+    /// Disable optical sizing entirely (default).
+    #[default]
     None,
 }
 
@@ -387,7 +387,7 @@ impl<'a> Attrs<'a> {
             letter_spacing_opt: None,
             font_features: FontFeatures::new(),
             text_decoration: TextDecoration::new(),
-            optical_size: OpticalSize::Auto,
+            optical_size: OpticalSize::None,
         }
     }
 
@@ -452,8 +452,8 @@ impl<'a> Attrs<'a> {
     }
 
     /// Enable or disable optical sizing (CSS `font-optical-sizing`).
-    /// When enabled (default), the `opsz` axis is set to match the font size.
-    /// When disabled, the `opsz` axis is left at the font's default value.
+    /// When enabled, the `opsz` axis is set to match the font size.
+    /// When disabled (default), the `opsz` axis is left at the font's default value.
     pub const fn optical_sizing(mut self, enabled: bool) -> Self {
         self.optical_size = if enabled {
             OpticalSize::Auto
