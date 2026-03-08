@@ -17,27 +17,49 @@ fn swash_image(
     context: &mut ScaleContext,
     cache_key: CacheKey,
 ) -> Option<SwashImage> {
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight) else {
+    let font_size = f32::from_bits(cache_key.font_size_bits);
+    let opsz_value = if cache_key.optical_size_bits == u32::MAX {
+        None
+    } else {
+        Some(f32::from_bits(cache_key.optical_size_bits))
+    };
+    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz_value)
+    else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
 
-    let variable_width = font
-        .as_swash()
-        .variations()
-        .find_by_tag(swash::Tag::from_be_bytes(*b"wght"));
-
-    // Build the scaler
+    // Build the scaler with variable font axis settings (single pass over axes)
+    let swash_font = font.as_swash();
+    let wght_tag = swash::Tag::from_be_bytes(*b"wght");
+    let opsz_tag = swash::Tag::from_be_bytes(*b"opsz");
+    let mut wght = None;
+    let mut opsz = None;
+    for var in swash_font.variations() {
+        let tag = var.tag();
+        if tag == wght_tag {
+            wght = Some(swash::Setting {
+                tag: wght_tag,
+                value: f32::from(cache_key.font_weight.0).clamp(var.min_value(), var.max_value()),
+            });
+        } else if let Some(ov) = opsz_value {
+            if tag == opsz_tag {
+                opsz = Some(swash::Setting {
+                    tag: opsz_tag,
+                    value: ov.clamp(var.min_value(), var.max_value()),
+                });
+            }
+        }
+        if wght.is_some() && (opsz.is_some() || opsz_value.is_none()) {
+            break;
+        }
+    }
     let mut scaler = context
-        .builder(font.as_swash())
-        .size(f32::from_bits(cache_key.font_size_bits))
+        .builder(swash_font)
+        .size(font_size)
         .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if let Some(variation) = variable_width {
-        scaler = scaler.variations(std::iter::once(swash::Setting {
-            tag: swash::Tag::from_be_bytes(*b"wght"),
-            value: f32::from(cache_key.font_weight.0)
-                .clamp(variation.min_value(), variation.max_value()),
-        }));
+    if wght.is_some() || opsz.is_some() {
+        scaler = scaler.variations(wght.into_iter().chain(opsz));
     }
     let mut scaler = scaler.build();
 
@@ -84,27 +106,49 @@ fn swash_outline_commands(
 ) -> Option<Box<[swash::zeno::Command]>> {
     use swash::zeno::PathData as _;
 
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight) else {
+    let font_size = f32::from_bits(cache_key.font_size_bits);
+    let opsz_value = if cache_key.optical_size_bits == u32::MAX {
+        None
+    } else {
+        Some(f32::from_bits(cache_key.optical_size_bits))
+    };
+    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz_value)
+    else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
 
-    let variable_width = font
-        .as_swash()
-        .variations()
-        .find_by_tag(swash::Tag::from_be_bytes(*b"wght"));
-
-    // Build the scaler
+    // Build the scaler with variable font axis settings (single pass over axes)
+    let swash_font = font.as_swash();
+    let wght_tag = swash::Tag::from_be_bytes(*b"wght");
+    let opsz_tag = swash::Tag::from_be_bytes(*b"opsz");
+    let mut wght = None;
+    let mut opsz = None;
+    for var in swash_font.variations() {
+        let tag = var.tag();
+        if tag == wght_tag {
+            wght = Some(swash::Setting {
+                tag: wght_tag,
+                value: f32::from(cache_key.font_weight.0).clamp(var.min_value(), var.max_value()),
+            });
+        } else if let Some(ov) = opsz_value {
+            if tag == opsz_tag {
+                opsz = Some(swash::Setting {
+                    tag: opsz_tag,
+                    value: ov.clamp(var.min_value(), var.max_value()),
+                });
+            }
+        }
+        if wght.is_some() && (opsz.is_some() || opsz_value.is_none()) {
+            break;
+        }
+    }
     let mut scaler = context
-        .builder(font.as_swash())
-        .size(f32::from_bits(cache_key.font_size_bits))
+        .builder(swash_font)
+        .size(font_size)
         .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if let Some(variation) = variable_width {
-        scaler = scaler.variations(std::iter::once(swash::Setting {
-            tag: swash::Tag::from_be_bytes(*b"wght"),
-            value: f32::from(cache_key.font_weight.0)
-                .clamp(variation.min_value(), variation.max_value()),
-        }));
+    if wght.is_some() || opsz.is_some() {
+        scaler = scaler.variations(wght.into_iter().chain(opsz));
     }
     let mut scaler = scaler.build();
 

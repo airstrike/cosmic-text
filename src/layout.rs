@@ -4,7 +4,7 @@ use core::fmt::Display;
 
 use core::ops::Range;
 
-use crate::{math, CacheKey, CacheKeyFlags, Color, GlyphDecorationData};
+use crate::{math, CacheKey, CacheKeyFlags, Color, GlyphDecorationData, OpticalSize};
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
@@ -60,6 +60,8 @@ pub struct LayoutGlyph {
     pub metadata: usize,
     /// [`CacheKeyFlags`]
     pub cache_key_flags: CacheKeyFlags,
+    /// Optical size setting
+    pub optical_size: OpticalSize,
 }
 
 /// A span of consecutive glyphs sharing the same text decoration.
@@ -100,6 +102,7 @@ impl LayoutGlyph {
             ),
             self.font_weight,
             self.cache_key_flags,
+            self.optical_size.resolve(self.font_size * scale),
         );
 
         PhysicalGlyph { cache_key, x, y }

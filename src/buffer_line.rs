@@ -212,7 +212,12 @@ impl BufferLine {
 
     /// Shape line, will cache results
     #[allow(clippy::missing_panics_doc)]
-    pub fn shape(&mut self, font_system: &mut FontSystem, tab_width: u16) -> &ShapeLine {
+    pub fn shape(
+        &mut self,
+        font_system: &mut FontSystem,
+        tab_width: u16,
+        font_size: f32,
+    ) -> &ShapeLine {
         if self.shape_opt.is_unused() {
             let mut line = self
                 .shape_opt
@@ -224,6 +229,7 @@ impl BufferLine {
                 &self.attrs_list,
                 self.shaping,
                 tab_width,
+                font_size,
             );
             self.shape_opt.set_used(line);
             self.layout_opt.set_unused();
@@ -255,7 +261,7 @@ impl BufferLine {
                 .layout_opt
                 .take_unused()
                 .unwrap_or_else(|| Vec::with_capacity(1));
-            let shape = self.shape(font_system, tab_width);
+            let shape = self.shape(font_system, tab_width, font_size);
             shape.layout_to_buffer(
                 &mut font_system.shape_buffer,
                 font_size,
