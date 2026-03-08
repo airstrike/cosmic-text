@@ -29,39 +29,18 @@ fn swash_image(
         return None;
     };
 
-    // Build the scaler with variable font axis settings (single pass over axes)
+    // Pass skrifa's pre-normalized variation coordinates to swash directly.
+    // This ensures both libraries use identical axis values after avar
+    // remapping, avoiding glyph shape mismatches on fonts with non-linear
+    // avar tables (e.g. .SF NS on macOS).
     let swash_font = font.as_swash();
-    let wght_tag = swash::Tag::from_be_bytes(*b"wght");
-    let opsz_tag = swash::Tag::from_be_bytes(*b"opsz");
-    let mut wght = None;
-    let mut opsz = None;
-    for var in swash_font.variations() {
-        let tag = var.tag();
-        if tag == wght_tag {
-            wght = Some(swash::Setting {
-                tag: wght_tag,
-                value: f32::from(cache_key.font_weight.0).clamp(var.min_value(), var.max_value()),
-            });
-        } else if let Some(ov) = opsz_value {
-            if tag == opsz_tag {
-                opsz = Some(swash::Setting {
-                    tag: opsz_tag,
-                    value: ov.clamp(var.min_value(), var.max_value()),
-                });
-            }
-        }
-        if wght.is_some() && (opsz.is_some() || opsz_value.is_none()) {
-            break;
-        }
-    }
+    let coords = font.normalized_coords();
     let mut scaler = context
         .builder(swash_font)
         .size(font_size)
-        .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if wght.is_some() || opsz.is_some() {
-        scaler = scaler.variations(wght.into_iter().chain(opsz));
-    }
-    let mut scaler = scaler.build();
+        .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING))
+        .normalized_coords(coords.iter().copied())
+        .build();
 
     // Compute the fractional offset-- you'll likely want to quantize this
     // in a real renderer
@@ -118,39 +97,18 @@ fn swash_outline_commands(
         return None;
     };
 
-    // Build the scaler with variable font axis settings (single pass over axes)
+    // Pass skrifa's pre-normalized variation coordinates to swash directly.
+    // This ensures both libraries use identical axis values after avar
+    // remapping, avoiding glyph shape mismatches on fonts with non-linear
+    // avar tables (e.g. .SF NS on macOS).
     let swash_font = font.as_swash();
-    let wght_tag = swash::Tag::from_be_bytes(*b"wght");
-    let opsz_tag = swash::Tag::from_be_bytes(*b"opsz");
-    let mut wght = None;
-    let mut opsz = None;
-    for var in swash_font.variations() {
-        let tag = var.tag();
-        if tag == wght_tag {
-            wght = Some(swash::Setting {
-                tag: wght_tag,
-                value: f32::from(cache_key.font_weight.0).clamp(var.min_value(), var.max_value()),
-            });
-        } else if let Some(ov) = opsz_value {
-            if tag == opsz_tag {
-                opsz = Some(swash::Setting {
-                    tag: opsz_tag,
-                    value: ov.clamp(var.min_value(), var.max_value()),
-                });
-            }
-        }
-        if wght.is_some() && (opsz.is_some() || opsz_value.is_none()) {
-            break;
-        }
-    }
+    let coords = font.normalized_coords();
     let mut scaler = context
         .builder(swash_font)
         .size(font_size)
-        .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if wght.is_some() || opsz.is_some() {
-        scaler = scaler.variations(wght.into_iter().chain(opsz));
-    }
-    let mut scaler = scaler.build();
+        .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING))
+        .normalized_coords(coords.iter().copied())
+        .build();
 
     // Scale the outline
     let mut outline = scaler

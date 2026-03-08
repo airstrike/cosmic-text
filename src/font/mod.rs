@@ -55,6 +55,11 @@ pub struct Font {
     id: fontdb::ID,
     monospace_fallback: Option<FontMonospaceFallback>,
     pub(crate) italic_or_oblique: bool,
+    /// Normalized variation coordinates (2.14 fixed-point i16) from skrifa.
+    /// Used to pass pre-normalized values to the swash rasterizer, avoiding
+    /// mismatches from independent avar table processing.
+    #[cfg(feature = "swash")]
+    normalized_coords: Vec<i16>,
 }
 
 impl fmt::Debug for Font {
@@ -115,6 +120,16 @@ impl Font {
             offset: swash.0,
             key: swash.1,
         }
+    }
+
+    /// Returns the normalized variation coordinates computed by skrifa.
+    ///
+    /// These are 2.14 fixed-point i16 values that can be passed directly
+    /// to swash's `ScalerBuilder::normalized_coords()`, ensuring both
+    /// libraries use identical axis coordinates after avar remapping.
+    #[cfg(feature = "swash")]
+    pub fn normalized_coords(&self) -> &[i16] {
+        &self.normalized_coords
     }
 }
 
@@ -216,6 +231,11 @@ impl Font {
             )
         };
 
+        // Capture skrifa's normalized coords so swash can use them directly,
+        // avoiding avar normalization mismatches between the two libraries.
+        #[cfg(feature = "swash")]
+        let normalized_coords: Vec<i16> = location.coords().iter().map(|c| c.to_bits()).collect();
+
         Some(Self {
             id: info.id,
             monospace_fallback,
@@ -224,6 +244,8 @@ impl Font {
                 let swash = swash::FontRef::from_index((*data).as_ref(), info.index as usize)?;
                 (swash.offset, swash.key)
             },
+            #[cfg(feature = "swash")]
+            normalized_coords,
             harfrust: OwnedFace::try_new(
                 OwnedFaceData {
                     data: Arc::clone(&data),
