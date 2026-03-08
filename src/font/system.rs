@@ -1,4 +1,15 @@
 use crate::{Attrs, Font, FontMatchAttrs, HashMap, ShapeBuffer};
+
+/// Cache key for loaded fonts, combining font ID, weight, and bucketed optical size.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct FontCacheKey {
+    /// Font face ID in the database.
+    id: fontdb::ID,
+    /// Font weight (e.g. 400 for regular, 700 for bold).
+    weight: fontdb::Weight,
+    /// Optical size bucket: `Some(n)` sets the `opsz` axis to ~n, `None` uses the font's default.
+    opsz_bucket: Option<u16>,
+}
 use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
 use alloc::string::String;
@@ -137,7 +148,7 @@ pub struct FontSystem {
     db: fontdb::Database,
 
     /// Cache for loaded fonts from the database.
-    font_cache: HashMap<(fontdb::ID, fontdb::Weight), Option<Arc<Font>>>,
+    font_cache: HashMap<FontCacheKey, Option<Arc<Font>>>,
 
     /// Sorted unique ID's of all Monospace fonts in DB
     monospace_font_ids: Vec<fontdb::ID>,
@@ -298,16 +309,30 @@ impl FontSystem {
         (self.locale, self.db)
     }
 
-    /// Get a font by its ID and weight.
-    pub fn get_font(&mut self, id: fontdb::ID, weight: fontdb::Weight) -> Option<Arc<Font>> {
+    /// Get a font by its ID, weight, and optical size.
+    ///
+    /// `opsz` sets the `opsz` (optical size) axis on variable fonts.
+    /// `Some(font_size)` enables optical sizing, `None` uses the font's default.
+    /// The cache key buckets the value to the nearest integer to prevent cache explosion.
+    pub fn get_font(
+        &mut self,
+        id: fontdb::ID,
+        weight: fontdb::Weight,
+        opsz: Option<f32>,
+    ) -> Option<Arc<Font>> {
+        let opsz_bucket = opsz.map(|s| s.round().max(0.0) as u16);
         self.font_cache
-            .entry((id, weight))
+            .entry(FontCacheKey {
+                id,
+                weight,
+                opsz_bucket,
+            })
             .or_insert_with(|| {
                 #[cfg(feature = "std")]
                 unsafe {
                     self.db.make_shared_face_data(id);
                 }
-                if let Some(font) = Font::new(&self.db, id, weight) {
+                if let Some(font) = Font::new(&self.db, id, weight, opsz) {
                     Some(Arc::new(font))
                 } else {
                     log::warn!(
@@ -342,9 +367,10 @@ impl FontSystem {
         &mut self,
         id: fontdb::ID,
         weight: fontdb::Weight,
+        opsz: Option<f32>,
         word: &str,
     ) -> Option<usize> {
-        self.get_font(id, weight).map(|font| {
+        self.get_font(id, weight, opsz).map(|font| {
             let code_points = font.unicode_codepoints();
             let cache = self
                 .font_codepoint_support_info_cache

@@ -11,6 +11,76 @@ use crate::{CacheKeyFlags, Metrics};
 
 pub use fontdb::{Family, Stretch, Style, Weight};
 
+/// Optical size setting for variable fonts with an `opsz` axis.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum OpticalSize {
+    /// Automatically set `opsz` to match the font size (default).
+    #[default]
+    Auto,
+    /// Set `opsz` to a specific value, independent of font size.
+    Fixed(f32),
+    /// Disable optical sizing entirely.
+    None,
+}
+
+impl OpticalSize {
+    /// Resolve the optical size value given a font size.
+    ///
+    /// Returns `Some(value)` for the opsz axis, or `None` if disabled.
+    pub fn resolve(self, font_size: f32) -> Option<f32> {
+        match self {
+            Self::Auto => Some(font_size),
+            Self::Fixed(v) => Some(v),
+            Self::None => None,
+        }
+    }
+
+    /// Returns `true` if optical sizing is disabled.
+    pub fn is_none(self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
+impl PartialEq for OpticalSize {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Auto, Self::Auto) | (Self::None, Self::None) => true,
+            (Self::Fixed(a), Self::Fixed(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for OpticalSize {}
+
+impl core::hash::Hash for OpticalSize {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        if let Self::Fixed(v) = self {
+            v.to_bits().hash(state);
+        }
+    }
+}
+
+impl PartialOrd for OpticalSize {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OpticalSize {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        match (self, other) {
+            (Self::Auto, Self::Auto) | (Self::None, Self::None) => core::cmp::Ordering::Equal,
+            (Self::Auto, _) => core::cmp::Ordering::Less,
+            (_, Self::Auto) => core::cmp::Ordering::Greater,
+            (Self::None, _) => core::cmp::Ordering::Greater,
+            (_, Self::None) => core::cmp::Ordering::Less,
+            (Self::Fixed(a), Self::Fixed(b)) => a.to_bits().cmp(&b.to_bits()),
+        }
+    }
+}
+
 /// Text color
 #[derive(Clone, Copy, Debug, PartialOrd, Ord, Eq, Hash, PartialEq)]
 pub struct Color(pub u32);
@@ -297,6 +367,7 @@ pub struct Attrs<'a> {
     pub letter_spacing_opt: Option<LetterSpacing>,
     pub font_features: FontFeatures,
     pub text_decoration: TextDecoration,
+    pub optical_size: OpticalSize,
 }
 
 impl<'a> Attrs<'a> {
@@ -316,6 +387,7 @@ impl<'a> Attrs<'a> {
             letter_spacing_opt: None,
             font_features: FontFeatures::new(),
             text_decoration: TextDecoration::new(),
+            optical_size: OpticalSize::Auto,
         }
     }
 
@@ -376,6 +448,24 @@ impl<'a> Attrs<'a> {
     /// Set [`FontFeatures`]
     pub fn font_features(mut self, font_features: FontFeatures) -> Self {
         self.font_features = font_features;
+        self
+    }
+
+    /// Enable or disable optical sizing (CSS `font-optical-sizing`).
+    /// When enabled (default), the `opsz` axis is set to match the font size.
+    /// When disabled, the `opsz` axis is left at the font's default value.
+    pub const fn optical_sizing(mut self, enabled: bool) -> Self {
+        self.optical_size = if enabled {
+            OpticalSize::Auto
+        } else {
+            OpticalSize::None
+        };
+        self
+    }
+
+    /// Set optical size to a specific value, `Auto`, or `None`.
+    pub const fn optical_size(mut self, optical_size: OpticalSize) -> Self {
+        self.optical_size = optical_size;
         self
     }
 
@@ -454,6 +544,7 @@ pub struct AttrsOwned {
     pub letter_spacing_opt: Option<LetterSpacing>,
     pub font_features: FontFeatures,
     pub text_decoration: TextDecoration,
+    pub optical_size: OpticalSize,
 }
 
 impl AttrsOwned {
@@ -470,6 +561,7 @@ impl AttrsOwned {
             letter_spacing_opt: attrs.letter_spacing_opt,
             font_features: attrs.font_features.clone(),
             text_decoration: attrs.text_decoration,
+            optical_size: attrs.optical_size,
         }
     }
 
@@ -486,6 +578,7 @@ impl AttrsOwned {
             letter_spacing_opt: self.letter_spacing_opt,
             font_features: self.font_features.clone(),
             text_decoration: self.text_decoration,
+            optical_size: self.optical_size,
         }
     }
 }
