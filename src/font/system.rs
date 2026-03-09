@@ -1,6 +1,6 @@
-use crate::{Attrs, Font, FontMatchAttrs, HashMap, ShapeBuffer};
+use crate::{Attrs, Font, FontMatchAttrs, FontVariations, HashMap, ShapeBuffer};
 
-/// Cache key for loaded fonts, combining font ID, weight, and bucketed optical size.
+/// Cache key for loaded fonts, combining font ID, weight, bucketed optical size, and variations.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct FontCacheKey {
     /// Font face ID in the database.
@@ -9,6 +9,8 @@ struct FontCacheKey {
     weight: fontdb::Weight,
     /// Optical size bucket: `Some(n)` sets the `opsz` axis to ~n, `None` uses the font's default.
     opsz_bucket: Option<u16>,
+    /// Hash of additional variation axes (wdth, slnt, GRAD, etc.).
+    variations_hash: u64,
 }
 use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
@@ -309,30 +311,35 @@ impl FontSystem {
         (self.locale, self.db)
     }
 
-    /// Get a font by its ID, weight, and optical size.
+    /// Get a font by its ID, weight, optical size, and variation axes.
     ///
     /// `opsz` sets the `opsz` (optical size) axis on variable fonts.
     /// `Some(font_size)` enables optical sizing, `None` uses the font's default.
     /// The cache key buckets the value to the nearest integer to prevent cache explosion.
+    ///
+    /// `variations` provides additional variation axis values (e.g. `wdth`, `slnt`, `GRAD`).
     pub fn get_font(
         &mut self,
         id: fontdb::ID,
         weight: fontdb::Weight,
         opsz: Option<f32>,
+        variations: &FontVariations,
     ) -> Option<Arc<Font>> {
         let opsz_bucket = opsz.map(|s| s.round().max(0.0) as u16);
+        let variations_hash = variations.cache_hash();
         self.font_cache
             .entry(FontCacheKey {
                 id,
                 weight,
                 opsz_bucket,
+                variations_hash,
             })
             .or_insert_with(|| {
                 #[cfg(feature = "std")]
                 unsafe {
                     self.db.make_shared_face_data(id);
                 }
-                if let Some(font) = Font::new(&self.db, id, weight, opsz) {
+                if let Some(font) = Font::new(&self.db, id, weight, opsz, variations) {
                     Some(Arc::new(font))
                 } else {
                     log::warn!(
@@ -341,6 +348,37 @@ impl FontSystem {
                     );
                     None
                 }
+            })
+            .clone()
+    }
+
+    /// Get a cached font by its ID, weight, optical size, and precomputed variations hash.
+    ///
+    /// This is used by the swash rasterizer which only has a [`CacheKey`] (with a hash)
+    /// rather than the full [`FontVariations`]. The font should already be cached from shaping.
+    pub fn get_font_by_key(
+        &mut self,
+        id: fontdb::ID,
+        weight: fontdb::Weight,
+        opsz: Option<f32>,
+        variations_hash: u64,
+    ) -> Option<Arc<Font>> {
+        let opsz_bucket = opsz.map(|s| s.round().max(0.0) as u16);
+        self.font_cache
+            .entry(FontCacheKey {
+                id,
+                weight,
+                opsz_bucket,
+                variations_hash,
+            })
+            .or_insert_with(|| {
+                // Font wasn't cached — create without variations (best effort)
+                #[cfg(feature = "std")]
+                unsafe {
+                    self.db.make_shared_face_data(id);
+                }
+                let empty = FontVariations::new();
+                Font::new(&self.db, id, weight, opsz, &empty).map(Arc::new)
             })
             .clone()
     }
@@ -368,9 +406,10 @@ impl FontSystem {
         id: fontdb::ID,
         weight: fontdb::Weight,
         opsz: Option<f32>,
+        variations: &FontVariations,
         word: &str,
     ) -> Option<usize> {
-        self.get_font(id, weight, opsz).map(|font| {
+        self.get_font(id, weight, opsz, variations).map(|font| {
             let code_points = font.unicode_codepoints();
             let cache = self
                 .font_codepoint_support_info_cache
