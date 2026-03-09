@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::FontVariations;
 use harfrust::Shaper;
 use linebender_resource_handle::{Blob, FontData};
 use skrifa::raw::{ReadError, TableProvider as _};
@@ -139,6 +140,7 @@ impl Font {
         id: fontdb::ID,
         weight: fontdb::Weight,
         opsz: Option<f32>,
+        variations: &FontVariations,
     ) -> Option<Self> {
         let info = db.face(id)?;
 
@@ -158,15 +160,16 @@ impl Font {
         // `ShaperData`, and once to create the persistent `FontRef` tied to the
         // lifetime of the face data.
         let font_ref = FontRef::from_index((*data).as_ref(), info.index).ok()?;
-        let location = if let Some(opsz_val) = opsz {
-            font_ref.axes().location([
-                (Tag::new(b"wght"), weight.0 as f32),
-                (Tag::new(b"opsz"), opsz_val),
-            ])
-        } else {
-            font_ref
-                .axes()
-                .location([(Tag::new(b"wght"), weight.0 as f32)])
+        let location = {
+            let mut axes: Vec<(Tag, f32)> = Vec::with_capacity(2 + variations.variations.len());
+            axes.push((Tag::new(b"wght"), weight.0 as f32));
+            if let Some(opsz_val) = opsz {
+                axes.push((Tag::new(b"opsz"), opsz_val));
+            }
+            for v in &variations.variations {
+                axes.push((Tag::new(v.tag.as_bytes()), v.value));
+            }
+            font_ref.axes().location(axes)
         };
         let metrics = font_ref.metrics(Size::unscaled(), &location);
 

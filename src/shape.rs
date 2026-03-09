@@ -5,8 +5,8 @@
 use crate::fallback::FontFallbackIter;
 use crate::{
     math, Align, Attrs, AttrsList, CacheKeyFlags, Color, DecorationMetrics, DecorationSpan,
-    Ellipsize, EllipsizeHeightLimit, Font, FontSystem, GlyphDecorationData, Hinting, LayoutGlyph,
-    LayoutLine, Metrics, OpticalSize, Wrap,
+    Ellipsize, EllipsizeHeightLimit, Font, FontSystem, FontVariations, GlyphDecorationData,
+    Hinting, LayoutGlyph, LayoutLine, Metrics, OpticalSize, Wrap,
 };
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec, vec::Vec};
@@ -249,6 +249,7 @@ fn shape_fallback(
             cache_key_flags: override_fake_italic(attrs.cache_key_flags, font, &attrs),
             metrics_opt: attrs.metrics_opt.map(Into::into),
             optical_size: attrs.optical_size,
+            font_variations: attrs.font_variations.clone(),
         });
     }
 
@@ -329,6 +330,7 @@ fn shape_run(
         &line[start_run..end_run],
         attrs.weight,
         opsz,
+        attrs.font_variations.clone(),
     );
 
     let font = font_iter.next().expect("no default font found");
@@ -519,6 +521,7 @@ fn shape_skip(
         "",
         attrs.weight,
         opsz,
+        attrs.font_variations.clone(),
     );
 
     let font = font_iter.next().expect("no default font found");
@@ -564,6 +567,7 @@ fn shape_skip(
                     ),
                     metrics_opt: attrs.metrics_opt.map(Into::into),
                     optical_size: attrs.optical_size,
+                    font_variations: attrs.font_variations.clone(),
                 }
             }),
     );
@@ -601,10 +605,11 @@ pub struct ShapeGlyph {
     pub cache_key_flags: CacheKeyFlags,
     pub metrics_opt: Option<Metrics>,
     pub optical_size: OpticalSize,
+    pub font_variations: FontVariations,
 }
 
 impl ShapeGlyph {
-    const fn layout(
+    fn layout(
         &self,
         font_size: f32,
         line_height_opt: Option<f32>,
@@ -631,6 +636,7 @@ impl ShapeGlyph {
             metadata: self.metadata,
             cache_key_flags: self.cache_key_flags,
             optical_size: self.optical_size,
+            font_variations: self.font_variations.clone(),
         }
     }
 
@@ -966,6 +972,7 @@ impl ShapeSpan {
                             &probe_text,
                             attrs.weight,
                             opsz,
+                            attrs.font_variations.clone(),
                         );
 
                         if let Some(font) = font_iter.next() {
@@ -1099,7 +1106,12 @@ impl ShapeSpan {
                     let effective_font_size = glyph.metrics_opt.map_or(font_size, |m| m.font_size);
                     let opsz = glyph.optical_size.resolve(effective_font_size);
                     font_system
-                        .get_font(glyph.font_id, glyph.font_weight, opsz)
+                        .get_font(
+                            glyph.font_id,
+                            glyph.font_weight,
+                            opsz,
+                            &glyph.font_variations,
+                        )
                         .map(|font| decoration_metrics(&font))
                 });
 

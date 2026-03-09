@@ -23,8 +23,12 @@ fn swash_image(
     } else {
         Some(f32::from_bits(cache_key.optical_size_bits))
     };
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz_value)
-    else {
+    let Some(font) = font_system.get_font_by_key(
+        cache_key.font_id,
+        cache_key.font_weight,
+        opsz_value,
+        cache_key.variations_hash,
+    ) else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
@@ -91,8 +95,12 @@ fn swash_outline_commands(
     } else {
         Some(f32::from_bits(cache_key.optical_size_bits))
     };
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz_value)
-    else {
+    let Some(font) = font_system.get_font_by_key(
+        cache_key.font_id,
+        cache_key.font_weight,
+        opsz_value,
+        cache_key.variations_hash,
+    ) else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
