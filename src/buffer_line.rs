@@ -16,6 +16,7 @@ pub struct BufferLine {
     ending: LineEnding,
     attrs_list: AttrsList,
     align: Option<Align>,
+    margin_left: f32,
     shape_opt: Cached<ShapeLine>,
     layout_opt: Cached<Vec<LayoutLine>>,
     shaping: Shaping,
@@ -37,6 +38,7 @@ impl BufferLine {
             ending,
             attrs_list,
             align: None,
+            margin_left: 0.0,
             shape_opt: Cached::Empty,
             layout_opt: Cached::Empty,
             shaping,
@@ -58,6 +60,7 @@ impl BufferLine {
         self.ending = ending;
         self.attrs_list = attrs_list;
         self.align = None;
+        self.margin_left = 0.0;
         self.shape_opt.set_unused();
         self.layout_opt.set_unused();
         self.shaping = shaping;
@@ -155,6 +158,26 @@ impl BufferLine {
         }
     }
 
+    /// Get the left margin in pixels
+    pub const fn margin_left(&self) -> f32 {
+        self.margin_left
+    }
+
+    /// Set the left margin in pixels
+    ///
+    /// Reduces available wrapping width and offsets glyph x-positions.
+    /// Will reset layout if it differs from current margin.
+    /// Returns true if the line was reset
+    pub fn set_margin_left(&mut self, margin_left: f32) -> bool {
+        if (margin_left - self.margin_left).abs() > f32::EPSILON {
+            self.margin_left = margin_left;
+            self.reset_layout();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Append line at end of this line
     ///
     /// The wrap setting of the appended line will be lost
@@ -190,6 +213,7 @@ impl BufferLine {
         // To preserve line endings, it moves to the new line
         self.ending = LineEnding::None;
         new.align = self.align;
+        new.margin_left = self.margin_left;
         new
     }
 
@@ -261,6 +285,7 @@ impl BufferLine {
     ) -> &[LayoutLine] {
         if self.layout_opt.is_unused() {
             let align = self.align;
+            let margin_left = self.margin_left;
             let mut layout = self
                 .layout_opt
                 .take_unused()
@@ -276,6 +301,7 @@ impl BufferLine {
                 &mut layout,
                 match_mono_width,
                 hinting,
+                margin_left,
             );
             self.layout_opt.set_used(layout);
         }
@@ -312,6 +338,7 @@ impl BufferLine {
             ending: LineEnding::None,
             attrs_list: AttrsList::new(&Attrs::new()),
             align: None,
+            margin_left: 0.0,
             shape_opt: Cached::Empty,
             layout_opt: Cached::Empty,
             shaping: Shaping::Advanced,
