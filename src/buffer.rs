@@ -52,6 +52,8 @@ pub struct LayoutRun<'a> {
     pub line_height: f32,
     /// Width of line
     pub line_w: f32,
+    /// X offset of the line start (margin + alignment)
+    pub x_offset: f32,
 }
 
 impl LayoutRun<'_> {
@@ -278,6 +280,7 @@ impl<'b> Iterator for LayoutRunIter<'b> {
                     line_top,
                     line_height,
                     line_w: layout_line.w,
+                    x_offset: layout_line.x_offset,
                 });
             }
             self.line_i += 1;

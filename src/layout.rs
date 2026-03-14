@@ -119,6 +119,12 @@ impl LayoutGlyph {
 pub struct LayoutLine {
     /// Width of the line
     pub w: f32,
+    /// X offset of the line start (margin + alignment).
+    ///
+    /// For non-empty lines this is also baked into each glyph's `x`, but
+    /// empty lines have no glyphs so consumers need this to position
+    /// cursors and selection highlights correctly.
+    pub x_offset: f32,
     /// Maximum ascent of the glyphs in line
     pub max_ascent: f32,
     /// Maximum descent of the glyphs in line

@@ -2887,6 +2887,7 @@ impl ShapeLine {
             } else {
                 x += alignment_correction;
             }
+            let x_offset = x;
 
             if hinting == Hinting::Enabled {
                 x = x.round();
@@ -3115,6 +3116,7 @@ impl ShapeLine {
                 } else {
                     x - margin_left
                 },
+                x_offset,
                 max_ascent,
                 max_descent,
                 line_height_opt,
@@ -3125,8 +3127,19 @@ impl ShapeLine {
 
         // This is used to create a visual line for empty lines (e.g. lines with only a <CR>)
         if layout_lines.is_empty() {
+            // Compute the same alignment offset that non-empty lines get,
+            // so that cursors and selection highlights are positioned correctly.
+            let empty_x = match (align, self.rtl) {
+                (Align::Center, _) => margin_left + effective_width_opt.unwrap_or(0.0) / 2.0,
+                (Align::Right, false) | (Align::End, false) => {
+                    margin_left + effective_width_opt.unwrap_or(0.0)
+                }
+                (Align::Left, true) => margin_left + effective_width_opt.unwrap_or(0.0),
+                _ => margin_left,
+            };
             layout_lines.push(LayoutLine {
                 w: 0.0,
+                x_offset: empty_x,
                 max_ascent: 0.0,
                 max_descent: 0.0,
                 line_height_opt: self.metrics_opt.map(|x| x.line_height),
