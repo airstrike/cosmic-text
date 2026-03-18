@@ -24,6 +24,7 @@ pub struct Editor<'buffer> {
     selection: Selection,
     cursor_moved: bool,
     auto_indent: bool,
+    scrollable: bool,
     change: Option<Change>,
 }
 
@@ -42,6 +43,7 @@ impl<'buffer> Editor<'buffer> {
             selection: Selection::None,
             cursor_moved: false,
             auto_indent: false,
+            scrollable: true,
             change: None,
         }
     }
@@ -210,6 +212,14 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
         self.auto_indent = auto_indent;
     }
 
+    fn scrollable(&self) -> bool {
+        self.scrollable
+    }
+
+    fn set_scrollable(&mut self, scrollable: bool) {
+        self.scrollable = scrollable;
+    }
+
     fn tab_width(&self) -> u16 {
         self.with_buffer(super::super::buffer::Buffer::tab_width)
     }
@@ -221,7 +231,10 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
     fn shape_as_needed(&mut self, font_system: &mut FontSystem, prune: bool) {
         if self.cursor_moved {
             let cursor = self.cursor;
-            self.with_buffer_mut(|buffer| buffer.shape_until_cursor(font_system, cursor, prune));
+            let scrollable = self.scrollable;
+            self.with_buffer_mut(|buffer| {
+                buffer.shape_until_cursor(font_system, cursor, prune, scrollable);
+            });
             self.cursor_moved = false;
         } else {
             self.with_buffer_mut(|buffer| buffer.shape_until_scroll(font_system, prune));
@@ -827,12 +840,14 @@ impl<'buffer> Edit<'buffer> for Editor<'buffer> {
                 }
             }
             Action::Scroll { pixels } => {
-                self.with_buffer_mut(|buffer| {
-                    let mut scroll = buffer.scroll();
-                    //TODO: align to layout lines
-                    scroll.vertical += pixels;
-                    buffer.set_scroll(scroll);
-                });
+                if self.scrollable {
+                    self.with_buffer_mut(|buffer| {
+                        let mut scroll = buffer.scroll();
+                        //TODO: align to layout lines
+                        scroll.vertical += pixels;
+                        buffer.set_scroll(scroll);
+                    });
+                }
             }
         }
 

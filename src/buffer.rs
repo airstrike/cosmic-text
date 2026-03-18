@@ -468,6 +468,7 @@ impl Buffer {
         font_system: &mut FontSystem,
         cursor: Cursor,
         prune: bool,
+        adjust_scroll: bool,
     ) {
         self.shape_until_scroll(font_system, prune);
         let metrics = self.metrics;
@@ -492,6 +493,14 @@ impl Buffer {
                     .line_height_opt
                     .unwrap_or(metrics.line_height)
         };
+
+        if !adjust_scroll {
+            // Shaping done above via layout_cursor / line_layout; skip scroll.
+            if self.scroll != old_scroll {
+                self.set_redraw(true);
+            }
+            return;
+        }
 
         if self.scroll.line > layout_cursor.line
             || (self.scroll.line == layout_cursor.line && self.scroll.vertical > layout_y)
@@ -1655,7 +1664,7 @@ impl BorrowedWithFontSystem<'_, Buffer> {
     /// Shape lines until cursor, also scrolling to include cursor in view
     pub fn shape_until_cursor(&mut self, cursor: Cursor, prune: bool) {
         self.inner
-            .shape_until_cursor(self.font_system, cursor, prune);
+            .shape_until_cursor(self.font_system, cursor, prune, true);
     }
 
     /// Shape the provided line index and return the result

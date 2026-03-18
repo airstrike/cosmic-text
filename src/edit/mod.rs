@@ -288,6 +288,12 @@ pub trait Edit<'buffer> {
     /// Enable or disable automatic indentation
     fn set_auto_indent(&mut self, auto_indent: bool);
 
+    /// Returns whether the editor scrolls to keep the cursor visible.
+    fn scrollable(&self) -> bool;
+
+    /// Enable or disable automatic scrolling to keep the cursor visible.
+    fn set_scrollable(&mut self, scrollable: bool);
+
     /// Get the current tab width
     fn tab_width(&self) -> u16;
 

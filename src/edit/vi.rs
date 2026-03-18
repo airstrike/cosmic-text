@@ -561,6 +561,14 @@ impl<'buffer> Edit<'buffer> for ViEditor<'_, 'buffer> {
         self.editor.set_auto_indent(auto_indent);
     }
 
+    fn scrollable(&self) -> bool {
+        self.editor.scrollable()
+    }
+
+    fn set_scrollable(&mut self, scrollable: bool) {
+        self.editor.set_scrollable(scrollable);
+    }
+
     fn tab_width(&self) -> u16 {
         self.editor.tab_width()
     }
