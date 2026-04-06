@@ -17,6 +17,8 @@ pub struct BufferLine {
     attrs_list: AttrsList,
     align: Option<Align>,
     margin_left: f32,
+    margin_top: f32,
+    margin_bottom: f32,
     shape_opt: Cached<ShapeLine>,
     layout_opt: Cached<Vec<LayoutLine>>,
     shaping: Shaping,
@@ -39,6 +41,8 @@ impl BufferLine {
             attrs_list,
             align: None,
             margin_left: 0.0,
+            margin_top: 0.0,
+            margin_bottom: 0.0,
             shape_opt: Cached::Empty,
             layout_opt: Cached::Empty,
             shaping,
@@ -61,6 +65,8 @@ impl BufferLine {
         self.attrs_list = attrs_list;
         self.align = None;
         self.margin_left = 0.0;
+        self.margin_top = 0.0;
+        self.margin_bottom = 0.0;
         self.shape_opt.set_unused();
         self.layout_opt.set_unused();
         self.shaping = shaping;
@@ -178,6 +184,34 @@ impl BufferLine {
         }
     }
 
+    pub const fn margin_top(&self) -> f32 {
+        self.margin_top
+    }
+
+    pub fn set_margin_top(&mut self, margin_top: f32) -> bool {
+        if (margin_top - self.margin_top).abs() > f32::EPSILON {
+            self.margin_top = margin_top;
+            self.reset_layout();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub const fn margin_bottom(&self) -> f32 {
+        self.margin_bottom
+    }
+
+    pub fn set_margin_bottom(&mut self, margin_bottom: f32) -> bool {
+        if (margin_bottom - self.margin_bottom).abs() > f32::EPSILON {
+            self.margin_bottom = margin_bottom;
+            self.reset_layout();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Append line at end of this line
     ///
     /// The wrap setting of the appended line will be lost
@@ -214,6 +248,8 @@ impl BufferLine {
         self.ending = LineEnding::None;
         new.align = self.align;
         new.margin_left = self.margin_left;
+        new.margin_top = self.margin_top;
+        new.margin_bottom = self.margin_bottom;
         new
     }
 
@@ -339,6 +375,8 @@ impl BufferLine {
             attrs_list: AttrsList::new(&Attrs::new()),
             align: None,
             margin_left: 0.0,
+            margin_top: 0.0,
+            margin_bottom: 0.0,
             shape_opt: Cached::Empty,
             layout_opt: Cached::Empty,
             shaping: Shaping::Advanced,

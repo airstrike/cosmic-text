@@ -250,6 +250,13 @@ impl<'b> Iterator for LayoutRunIter<'b> {
         while let Some(line) = self.lines.get(self.line_i) {
             let shape = line.shape_opt()?;
             let layout = line.layout_opt()?;
+
+            // Add margin_top before the first layout line of this buffer line
+            if self.layout_i == 0 {
+                self.line_top += line.margin_top();
+                self.total_height += line.margin_top();
+            }
+
             while let Some(layout_line) = layout.get(self.layout_i) {
                 self.layout_i += 1;
 
@@ -283,6 +290,11 @@ impl<'b> Iterator for LayoutRunIter<'b> {
                     x_offset: layout_line.x_offset,
                 });
             }
+
+            // Add margin_bottom after the last layout line of this buffer line
+            self.line_top += line.margin_bottom();
+            self.total_height += line.margin_bottom();
+
             self.line_i += 1;
             self.layout_i = 0;
         }
@@ -480,6 +492,8 @@ impl Buffer {
 
         let mut layout_y = 0.0;
         let mut total_height = {
+            let line = &self.lines[layout_cursor.line];
+            let line_margins = line.margin_top() + line.margin_bottom();
             let layout = self
                 .line_layout(font_system, layout_cursor.line)
                 .expect("shape_until_cursor failed to scroll forwards");
@@ -492,6 +506,7 @@ impl Buffer {
                 + layout[layout_cursor.layout]
                     .line_height_opt
                     .unwrap_or(metrics.line_height)
+                + line_margins
         };
 
         if !adjust_scroll {
@@ -525,6 +540,8 @@ impl Buffer {
                     for layout_line in layout {
                         total_height += layout_line.line_height_opt.unwrap_or(metrics.line_height);
                     }
+                    total_height +=
+                        self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
                     if total_height > height + self.scroll.vertical {
                         self.scroll.line = line_i;
                         self.scroll.vertical = total_height - height;
@@ -605,6 +622,8 @@ impl Buffer {
                             layout_height +=
                                 layout_line.line_height_opt.unwrap_or(metrics.line_height);
                         }
+                        layout_height +=
+                            self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
                         self.scroll.line = line_i;
                         self.scroll.vertical += layout_height;
                     } else {
@@ -645,6 +664,10 @@ impl Buffer {
                     layout_height += line_height;
                     total_height += line_height;
                 }
+
+                let margins = self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
+                layout_height += margins;
+                total_height += margins;
 
                 // Adjust scroll.vertical to be smaller by moving scroll.line forwards
                 if line_i == self.scroll.line && layout_height <= self.scroll.vertical {

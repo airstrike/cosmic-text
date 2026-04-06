@@ -343,6 +343,8 @@ impl<'buffer> Edit<'buffer> for SyntaxEditor<'_, 'buffer> {
                                 //TODO: should this be possible?
                             }
                         }
+                        total_height += buffer.lines[line_i].margin_top()
+                            + buffer.lines[line_i].margin_bottom();
                     }
                     continue;
                 }
@@ -414,6 +416,8 @@ impl<'buffer> Edit<'buffer> for SyntaxEditor<'_, 'buffer> {
                             //TODO: should this be possible?
                         }
                     }
+                    total_height +=
+                        buffer.lines[line_i].margin_top() + buffer.lines[line_i].margin_bottom();
                 }
 
                 let cache_item = (parse_state.clone(), highlight_state.path.clone());
