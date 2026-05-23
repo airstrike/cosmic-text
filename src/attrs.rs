@@ -665,6 +665,214 @@ impl AttrsOwned {
     }
 }
 
+/// One field of an [`AttrsOverride`]: either inherit the value from
+/// the line's defaults, or set it explicitly.
+///
+/// Used as the building block for sparse span overrides. For fields
+/// whose underlying [`Attrs`] type is already `Option<T>` (e.g.
+/// `color_opt: Option<Color>`), wrapping that `Option` inside
+/// `Override` yields a three-state semantic:
+/// - [`Inherit`](Self::Inherit) — use the line defaults.
+/// - `Set(None)` — force the field to "none" (e.g. clear color).
+/// - `Set(Some(v))` — set the field to `v`.
+///
+/// For non-`Option` fields like `Weight`, only the two-state behavior
+/// applies: `Inherit` or `Set(w)`.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub enum Override<T> {
+    /// Inherit this field from the line's default attributes.
+    #[default]
+    Inherit,
+    /// Override this field with the contained value.
+    Set(T),
+}
+
+impl<T: Copy> Copy for Override<T> {}
+
+impl<T> Override<T> {
+    /// Returns `true` if this is a [`Set`](Self::Set) value.
+    pub fn is_set(&self) -> bool {
+        matches!(self, Self::Set(_))
+    }
+
+    /// Returns `true` if this is [`Inherit`](Self::Inherit).
+    pub fn is_inherit(&self) -> bool {
+        matches!(self, Self::Inherit)
+    }
+
+    /// Borrow the contained value if [`Set`](Self::Set).
+    pub fn as_ref(&self) -> Override<&T> {
+        match self {
+            Self::Inherit => Override::Inherit,
+            Self::Set(v) => Override::Set(v),
+        }
+    }
+
+    /// Return the contained value if [`Set`](Self::Set), otherwise
+    /// return the provided default.
+    pub fn resolve_or(self, default: T) -> T {
+        match self {
+            Self::Inherit => default,
+            Self::Set(v) => v,
+        }
+    }
+}
+
+/// A sparse override on top of an [`AttrsList`]'s default attributes.
+///
+/// Each field carries an [`Override<T>`] — either inheriting from the
+/// line defaults or setting an explicit value. This lets per-span
+/// overrides express *only* what differs from defaults, so changing
+/// the line defaults automatically re-inherits for all unset fields.
+///
+/// See the type-level documentation on [`Override`] for the three-state
+/// semantic that applies to fields whose underlying type is already
+/// `Option<T>` (color, metrics, letter-spacing).
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct AttrsOverride {
+    pub color: Override<Option<Color>>,
+    pub metrics: Override<Option<CacheMetrics>>,
+    pub letter_spacing: Override<Option<LetterSpacing>>,
+    pub family: Override<FamilyOwned>,
+    pub stretch: Override<Stretch>,
+    pub style: Override<Style>,
+    pub weight: Override<Weight>,
+    pub metadata: Override<usize>,
+    pub cache_key_flags: Override<CacheKeyFlags>,
+    pub font_features: Override<FontFeatures>,
+    pub font_variations: Override<FontVariations>,
+    pub text_decoration: Override<TextDecoration>,
+    pub optical_size: Override<OpticalSize>,
+}
+
+impl AttrsOverride {
+    /// Compute the sparse override that maps `defaults` to `attrs`.
+    ///
+    /// For each field, returns [`Override::Inherit`] if the field is
+    /// equal in both sides, [`Override::Set`] with the value from
+    /// `attrs` otherwise.
+    pub fn diff(defaults: &Attrs, attrs: &Attrs) -> Self {
+        Self {
+            color: if attrs.color_opt == defaults.color_opt {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.color_opt)
+            },
+            metrics: if attrs.metrics_opt == defaults.metrics_opt {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.metrics_opt)
+            },
+            letter_spacing: if attrs.letter_spacing_opt == defaults.letter_spacing_opt {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.letter_spacing_opt)
+            },
+            family: if attrs.family == defaults.family {
+                Override::Inherit
+            } else {
+                Override::Set(FamilyOwned::new(attrs.family))
+            },
+            stretch: if attrs.stretch == defaults.stretch {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.stretch)
+            },
+            style: if attrs.style == defaults.style {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.style)
+            },
+            weight: if attrs.weight == defaults.weight {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.weight)
+            },
+            metadata: if attrs.metadata == defaults.metadata {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.metadata)
+            },
+            cache_key_flags: if attrs.cache_key_flags == defaults.cache_key_flags {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.cache_key_flags)
+            },
+            font_features: if attrs.font_features == defaults.font_features {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.font_features.clone())
+            },
+            font_variations: if attrs.font_variations == defaults.font_variations {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.font_variations.clone())
+            },
+            text_decoration: if attrs.text_decoration == defaults.text_decoration {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.text_decoration)
+            },
+            optical_size: if attrs.optical_size == defaults.optical_size {
+                Override::Inherit
+            } else {
+                Override::Set(attrs.optical_size)
+            },
+        }
+    }
+
+    /// Returns `true` if every field is [`Override::Inherit`] — i.e.
+    /// the override has no effect against any defaults.
+    pub fn is_empty(&self) -> bool {
+        self.color.is_inherit()
+            && self.metrics.is_inherit()
+            && self.letter_spacing.is_inherit()
+            && self.family.is_inherit()
+            && self.stretch.is_inherit()
+            && self.style.is_inherit()
+            && self.weight.is_inherit()
+            && self.metadata.is_inherit()
+            && self.cache_key_flags.is_inherit()
+            && self.font_features.is_inherit()
+            && self.font_variations.is_inherit()
+            && self.text_decoration.is_inherit()
+            && self.optical_size.is_inherit()
+    }
+
+    /// Merge this override on top of `defaults`, producing a complete
+    /// [`Attrs`].
+    ///
+    /// Fields set in `self` use their contained value; fields marked
+    /// [`Override::Inherit`] take the corresponding value from
+    /// `defaults`.
+    pub fn merge<'a>(&'a self, defaults: &'a AttrsOwned) -> Attrs<'a> {
+        Attrs {
+            color_opt: self.color.resolve_or(defaults.color_opt),
+            metrics_opt: self.metrics.resolve_or(defaults.metrics_opt),
+            letter_spacing_opt: self.letter_spacing.resolve_or(defaults.letter_spacing_opt),
+            stretch: self.stretch.resolve_or(defaults.stretch),
+            style: self.style.resolve_or(defaults.style),
+            weight: self.weight.resolve_or(defaults.weight),
+            metadata: self.metadata.resolve_or(defaults.metadata),
+            cache_key_flags: self.cache_key_flags.resolve_or(defaults.cache_key_flags),
+            text_decoration: self.text_decoration.resolve_or(defaults.text_decoration),
+            optical_size: self.optical_size.resolve_or(defaults.optical_size),
+            family: match &self.family {
+                Override::Inherit => defaults.family_owned.as_family(),
+                Override::Set(f) => f.as_family(),
+            },
+            font_features: match &self.font_features {
+                Override::Inherit => defaults.font_features.clone(),
+                Override::Set(f) => f.clone(),
+            },
+            font_variations: match &self.font_variations {
+                Override::Inherit => defaults.font_variations.clone(),
+                Override::Set(v) => v.clone(),
+            },
+        }
+    }
+}
+
 /// List of text attributes to apply to a line
 //TODO: have this clean up the spans when changes are made
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -765,5 +973,114 @@ impl AttrsList {
         self.defaults = AttrsOwned::new(default);
         self.spans.clear();
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn override_default_is_inherit() {
+        let o: Override<Weight> = Override::default();
+        assert!(o.is_inherit());
+        assert!(!o.is_set());
+    }
+
+    #[test]
+    fn override_resolve_or_falls_back_when_inherit() {
+        let o: Override<Weight> = Override::Inherit;
+        assert_eq!(o.resolve_or(Weight::BOLD), Weight::BOLD);
+    }
+
+    #[test]
+    fn override_resolve_or_returns_set_value() {
+        let o: Override<Weight> = Override::Set(Weight::NORMAL);
+        assert_eq!(o.resolve_or(Weight::BOLD), Weight::NORMAL);
+    }
+
+    #[test]
+    fn override_as_ref_borrows_set_value() {
+        let o: Override<FamilyOwned> = Override::Set(FamilyOwned::SansSerif);
+        match o.as_ref() {
+            Override::Set(f) => assert_eq!(*f, FamilyOwned::SansSerif),
+            Override::Inherit => panic!("expected Set"),
+        }
+    }
+
+    #[test]
+    fn attrs_override_default_is_all_inherit() {
+        let o = AttrsOverride::default();
+        assert!(o.is_empty());
+    }
+
+    #[test]
+    fn diff_against_equal_attrs_is_empty() {
+        let a = Attrs::new();
+        let o = AttrsOverride::diff(&a, &a);
+        assert!(o.is_empty());
+    }
+
+    #[test]
+    fn diff_against_different_weight_sets_weight_field() {
+        let defaults = Attrs::new();
+        let bold = Attrs::new().weight(Weight::BOLD);
+        let o = AttrsOverride::diff(&defaults, &bold);
+        assert!(!o.is_empty());
+        assert_eq!(o.weight, Override::Set(Weight::BOLD));
+        // Other fields remain Inherit.
+        assert!(o.color.is_inherit());
+        assert!(o.style.is_inherit());
+        assert!(o.metrics.is_inherit());
+    }
+
+    #[test]
+    fn diff_round_trip_preserves_semantic_equality() {
+        let defaults_owned = AttrsOwned::new(&Attrs::new());
+        let attrs = Attrs::new()
+            .weight(Weight::BOLD)
+            .style(Style::Italic)
+            .metrics(Metrics::new(20.0, 24.0));
+
+        let over = AttrsOverride::diff(&defaults_owned.as_attrs(), &attrs);
+        let merged = over.merge(&defaults_owned);
+
+        assert_eq!(merged.weight, attrs.weight);
+        assert_eq!(merged.style, attrs.style);
+        assert_eq!(merged.metrics_opt, attrs.metrics_opt);
+        // Untouched fields equal defaults.
+        assert_eq!(merged.color_opt, defaults_owned.color_opt);
+        assert_eq!(merged.family, defaults_owned.family_owned.as_family());
+    }
+
+    #[test]
+    fn set_none_distinct_from_inherit_for_color() {
+        // Defaults carry a color; a span wants to explicitly clear it.
+        let defaults_attrs = Attrs::new().color(Color(0xff_00_00_00));
+        let defaults_owned = AttrsOwned::new(&defaults_attrs);
+
+        // Inherit → merged color is defaults' color.
+        let inherit_over = AttrsOverride::default();
+        assert_eq!(
+            inherit_over.merge(&defaults_owned).color_opt,
+            Some(Color(0xff_00_00_00))
+        );
+
+        // Set(None) → merged color is explicitly cleared.
+        let clear_over = AttrsOverride {
+            color: Override::Set(None),
+            ..Default::default()
+        };
+        assert_eq!(clear_over.merge(&defaults_owned).color_opt, None);
+
+        // Set(Some(c)) → merged color is c.
+        let set_over = AttrsOverride {
+            color: Override::Set(Some(Color(0x00_00_ff_ff))),
+            ..Default::default()
+        };
+        assert_eq!(
+            set_over.merge(&defaults_owned).color_opt,
+            Some(Color(0x00_00_ff_ff))
+        );
     }
 }
