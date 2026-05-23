@@ -396,7 +396,7 @@ impl<'buffer> Edit<'buffer> for SyntaxEditor<'_, 'buffer> {
                             UnderlineStyle::None
                         });
                     if span_attrs != original_attrs {
-                        attrs_list.add_span(range, &span_attrs);
+                        attrs_list.add_span_from_attrs(range, &span_attrs);
                     }
                 }
 

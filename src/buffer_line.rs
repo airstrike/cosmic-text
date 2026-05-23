@@ -224,14 +224,19 @@ impl BufferLine {
 
         if other.attrs_list.defaults() != self.attrs_list.defaults() {
             // If default formatting does not match, make a new span for it
+            // (computes the override needed to express other's defaults
+            // against self's defaults).
             self.attrs_list
-                .add_span(len..len + other.text().len(), &other.attrs_list.defaults());
+                .add_span_from_attrs(len..len + other.text().len(), &other.attrs_list.defaults());
         }
 
-        for (other_range, attrs) in other.attrs_list.spans_iter() {
-            // Add previous attrs spans
+        for (other_range, _over) in other.attrs_list.spans_iter() {
+            // Add previous attrs spans. We resolve through `other`'s
+            // defaults to preserve the span's visual outcome, then
+            // re-diff against `self`'s defaults inside `add_span_from_attrs`.
+            let resolved = other.attrs_list.get_span(other_range.start);
             let range = other_range.start + len..other_range.end + len;
-            self.attrs_list.add_span(range, &attrs.as_attrs());
+            self.attrs_list.add_span_from_attrs(range, &resolved);
         }
 
         self.reset();

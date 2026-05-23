@@ -6,7 +6,7 @@ use crate::fallback::FontFallbackIter;
 use crate::{
     math, Align, Attrs, AttrsList, CacheKeyFlags, Color, DecorationMetrics, DecorationSpan,
     Ellipsize, EllipsizeHeightLimit, Family, Font, FontSystem, FontVariations, GlyphDecorationData,
-    Hinting, LayoutGlyph, LayoutLine, Metrics, OpticalSize, Wrap,
+    Hinting, LayoutGlyph, LayoutLine, Metrics, OpticalSize, Override, Wrap,
 };
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec, vec::Vec};
@@ -452,16 +452,16 @@ fn shape_run_cached(
         default_attrs: AttrsOwned::new(&attrs_list.defaults()),
         attrs_spans: Vec::new(),
     };
-    for (attrs_range, attrs) in attrs_list.spans.overlapping(&run_range) {
-        if attrs == &key.default_attrs {
-            // Skip if attrs matches default attrs
+    for (attrs_range, over) in attrs_list.spans.overlapping(&run_range) {
+        if over.is_empty() {
+            // Skip overrides with no effect against the line defaults.
             continue;
         }
         let start = max(attrs_range.start, start_run).saturating_sub(start_run);
         let end = min(attrs_range.end, end_run).saturating_sub(start_run);
         if end > start {
             let range = start..end;
-            key.attrs_spans.push((range, attrs.clone()));
+            key.attrs_spans.push((range, over.clone()));
         }
     }
     if let Some(cache_glyphs) = font_system.shape_run_cache.get(&key) {
@@ -872,10 +872,10 @@ impl ShapeWord {
 
         if is_simple_ascii && !word.is_empty() && {
             let attrs_start = attrs_list.get_span(word_range.start);
-            attrs_list.spans_iter().all(|(other_range, other_attrs)| {
+            attrs_list.spans_iter().all(|(other_range, other_over)| {
                 word_range.end <= other_range.start
                     || other_range.end <= word_range.start
-                    || attrs_start.compatible(&other_attrs.as_attrs())
+                    || attrs_start.compatible(&other_over.merge(&attrs_list.defaults))
             })
         } {
             shaping.run(
@@ -1168,10 +1168,17 @@ impl ShapeSpan {
         // Early-out: skip font lookup and span iteration when no decorations exist.
         // For plain text (the common case) this is a single bool check.
         let any_decoration = attrs_list.defaults().text_decoration.has_decoration()
-            || attrs_list.spans_iter().any(|(range, attr_owned)| {
+            || attrs_list.spans_iter().any(|(range, over)| {
                 let start = range.start.max(span_range.start);
                 let end = range.end.min(span_range.end);
-                start < end && attr_owned.as_attrs().text_decoration.has_decoration()
+                if start >= end {
+                    return false;
+                }
+                match &over.text_decoration {
+                    // Inherit means defaults — already checked above.
+                    Override::Inherit => false,
+                    Override::Set(td) => td.has_decoration(),
+                }
             });
 
         if any_decoration {
@@ -1198,7 +1205,7 @@ impl ShapeSpan {
                 // Track which sub-ranges of span_range are covered by explicit spans
                 let mut covered_end = span_range.start;
 
-                for (range, attr_owned) in attrs_list.spans_iter() {
+                for (range, over) in attrs_list.spans_iter() {
                     // Compute intersection with our shape span's byte range
                     let start = range.start.max(span_range.start);
                     let end = range.end.min(span_range.end);
@@ -1223,12 +1230,17 @@ impl ShapeSpan {
                     }
                     covered_end = end;
 
-                    let attrs = attr_owned.as_attrs();
-                    if attrs.text_decoration.has_decoration() {
+                    // Resolve the span's text_decoration against defaults
+                    // (Inherit → defaults' td; Set(td) → td).
+                    let text_decoration = match &over.text_decoration {
+                        Override::Inherit => attrs_list.defaults().text_decoration,
+                        Override::Set(td) => *td,
+                    };
+                    if text_decoration.has_decoration() {
                         self.decoration_spans.push((
                             start..end,
                             GlyphDecorationData {
-                                text_decoration: attrs.text_decoration,
+                                text_decoration,
                                 underline_metrics: ul_metrics,
                                 strikethrough_metrics: st_metrics,
                                 ascent,

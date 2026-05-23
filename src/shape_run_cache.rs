@@ -2,14 +2,16 @@
 use alloc::{string::String, vec::Vec};
 use core::ops::Range;
 
-use crate::{AttrsOwned, HashMap, ShapeGlyph};
+use crate::{AttrsOverride, AttrsOwned, HashMap, ShapeGlyph};
 
 /// Key for caching shape runs.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ShapeRunKey {
     pub text: String,
     pub default_attrs: AttrsOwned,
-    pub attrs_spans: Vec<(Range<usize>, AttrsOwned)>,
+    /// Sparse per-range overrides. Only spans with at least one
+    /// `Override::Set(_)` field contribute to the key.
+    pub attrs_spans: Vec<(Range<usize>, AttrsOverride)>,
 }
 
 /// A helper structure for caching shape runs.

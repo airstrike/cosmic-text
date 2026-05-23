@@ -877,8 +877,8 @@ impl AttrsOverride {
 //TODO: have this clean up the spans when changes are made
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AttrsList {
-    defaults: AttrsOwned,
-    pub(crate) spans: RangeMap<usize, AttrsOwned>,
+    pub(crate) defaults: AttrsOwned,
+    pub(crate) spans: RangeMap<usize, AttrsOverride>,
 }
 
 impl AttrsList {
@@ -896,12 +896,12 @@ impl AttrsList {
     }
 
     /// Get the current attribute spans
-    pub fn spans(&self) -> Vec<(&Range<usize>, &AttrsOwned)> {
+    pub fn spans(&self) -> Vec<(&Range<usize>, &AttrsOverride)> {
         self.spans_iter().collect()
     }
 
     /// Get an iterator over the current attribute spans
-    pub fn spans_iter(&self) -> impl Iterator<Item = (&Range<usize>, &AttrsOwned)> + '_ {
+    pub fn spans_iter(&self) -> impl Iterator<Item = (&Range<usize>, &AttrsOverride)> + '_ {
         self.spans.iter()
     }
 
@@ -910,24 +910,44 @@ impl AttrsList {
         self.spans.clear();
     }
 
-    /// Add an attribute span, removes any previous matching parts of spans
-    pub fn add_span(&mut self, range: Range<usize>, attrs: &Attrs) {
+    /// Add a sparse override span, removes any previous matching parts of
+    /// spans.
+    ///
+    /// Each field of `over` is either `Inherit` (resolves to the
+    /// corresponding default at lookup time via [`Self::get_span`]) or
+    /// `Set(v)` (overrides the default for that range). The override is
+    /// stored as-is — changing line defaults later naturally re-inherits
+    /// for all `Inherit` fields, with no rewrite of stored spans needed.
+    pub fn add_span(&mut self, range: Range<usize>, over: &AttrsOverride) {
         //do not support 1..1 or 2..1 even if by accident.
         if range.is_empty() {
             return;
         }
 
-        self.spans.insert(range, AttrsOwned::new(attrs));
+        self.spans.insert(range, over.clone());
     }
 
-    /// Get the attribute span for an index
+    /// Add an attribute span from a full [`Attrs`] value, computing the
+    /// sparse override against the current defaults.
     ///
-    /// This returns a span that contains the index
+    /// Backwards-compat helper for callers that build full `Attrs` and
+    /// hand them off. New code should construct an [`AttrsOverride`]
+    /// directly and call [`Self::add_span`].
+    pub fn add_span_from_attrs(&mut self, range: Range<usize>, attrs: &Attrs) {
+        if range.is_empty() {
+            return;
+        }
+        let over = AttrsOverride::diff(&self.defaults.as_attrs(), attrs);
+        self.spans.insert(range, over);
+    }
+
+    /// Get the resolved attributes at `index`, merging the per-position
+    /// sparse override (if any) on top of the line defaults.
     pub fn get_span(&self, index: usize) -> Attrs<'_> {
-        self.spans
-            .get(&index)
-            .map(|v| v.as_attrs())
-            .unwrap_or(self.defaults.as_attrs())
+        match self.spans.get(&index) {
+            None => self.defaults.as_attrs(),
+            Some(over) => over.merge(&self.defaults),
+        }
     }
 
     /// Split attributes list at an offset
@@ -950,7 +970,7 @@ impl AttrsList {
         }
 
         for (key, resize) in removes {
-            let (range, attrs) = self
+            let (range, over) = self
                 .spans
                 .get_key_value(&key.start)
                 .map(|v| (v.0.clone(), v.1.clone()))
@@ -958,11 +978,11 @@ impl AttrsList {
             self.spans.remove(key);
 
             if resize {
-                new.spans.insert(0..range.end - index, attrs.clone());
-                self.spans.insert(range.start..index, attrs);
+                new.spans.insert(0..range.end - index, over.clone());
+                self.spans.insert(range.start..index, over);
             } else {
                 new.spans
-                    .insert(range.start - index..range.end - index, attrs);
+                    .insert(range.start - index..range.end - index, over);
             }
         }
         new
@@ -1051,6 +1071,50 @@ mod tests {
         // Untouched fields equal defaults.
         assert_eq!(merged.color_opt, defaults_owned.color_opt);
         assert_eq!(merged.family, defaults_owned.family_owned.as_family());
+    }
+
+    #[test]
+    fn set_span_style_then_change_defaults_inherits_new_size() {
+        // Bug B reproduction at the cosmic-text level: when a sparse
+        // override on a span has `Inherit` for size and bold, swapping
+        // the line's default attrs (e.g., demoting heading → body)
+        // must let the span resolve against the *new* defaults instead
+        // of carrying the old size/bold forward.
+
+        // Heading-like defaults: bold + size 32.
+        let heading_attrs = Attrs::new()
+            .weight(Weight::BOLD)
+            .metrics(Metrics::new(32.0, 38.0));
+        let mut heading_list = AttrsList::new(&heading_attrs);
+
+        // Add a span that explicitly sets *only* italic — bold and
+        // size stay `Inherit`.
+        let italic_over = AttrsOverride {
+            style: Override::Set(Style::Italic),
+            ..Default::default()
+        };
+        heading_list.add_span(0..5, &italic_over);
+
+        // Under heading defaults: merged Attrs picks up bold + size 32
+        // from defaults, italic from the override.
+        let resolved = heading_list.get_span(0);
+        assert_eq!(resolved.weight, Weight::BOLD);
+        assert_eq!(resolved.style, Style::Italic);
+        assert!(resolved.metrics_opt.is_some());
+
+        // Swap to body defaults (no bold, no metrics override) and
+        // re-add the *same* override — mimicking what an editor does
+        // when paragraph style changes.
+        let body_attrs = Attrs::new();
+        let mut body_list = AttrsList::new(&body_attrs);
+        body_list.add_span(0..5, &italic_over);
+
+        // The override is unchanged — but now it resolves against
+        // body defaults, so bold and size disappear.
+        let resolved = body_list.get_span(0);
+        assert_eq!(resolved.weight, Weight::NORMAL);
+        assert_eq!(resolved.style, Style::Italic);
+        assert_eq!(resolved.metrics_opt, None);
     }
 
     #[test]

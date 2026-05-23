@@ -1053,7 +1053,7 @@ impl Buffer {
                 let text_end = line_string.len();
                 // Only add attrs if they don't match the defaults
                 if *attrs != attrs_list.defaults() {
-                    attrs_list.add_span(text_start..text_end, attrs);
+                    attrs_list.add_span_from_attrs(text_start..text_end, attrs);
                 }
             } else if line_string.is_empty() && attrs.metrics_opt.is_some() {
                 // reset the attrs list with the span's attrs so the line height
