@@ -1,0 +1,138 @@
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+ --> benches/text_shaping_benchmarks.rs:3:17
+  |
+3 | use criterion::{black_box, criterion_group, criterion_main, Criterion};
+  |                 ^^^^^^^^^
+  |
+  = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+  --> benches/text_shaping_benchmarks.rs:15:17
+   |
+15 |                 black_box(&ascii_text),
+   |                 ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+  --> benches/text_shaping_benchmarks.rs:35:17
+   |
+35 |                 black_box(&bidi_text),
+   |                 ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+  --> benches/text_shaping_benchmarks.rs:57:21
+   |
+57 |                     black_box(&bidi_text),
+   |                     ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+  --> benches/text_shaping_benchmarks.rs:77:17
+   |
+77 |                 black_box(&layout_text),
+   |                 ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+   --> benches/text_shaping_benchmarks.rs:102:17
+    |
+102 |                 black_box(&stress_text),
+    |                 ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+   --> benches/text_shaping_benchmarks.rs:117:45
+    |
+117 |             let paras = BidiParagraphs::new(black_box(&ascii_text));
+    |                                             ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+   --> benches/text_shaping_benchmarks.rs:118:13
+    |
+118 |             black_box(paras.count());
+    |             ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+   --> benches/text_shaping_benchmarks.rs:128:45
+    |
+128 |             let paras = BidiParagraphs::new(black_box(&mixed_text));
+    |                                             ^^^^^^^^^
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+   --> benches/text_shaping_benchmarks.rs:129:13
+    |
+129 |             black_box(paras.count());
+    |             ^^^^^^^^^
+
+warning: `cosmic-text` (bench "text_shaping_benchmarks") generated 10 warnings
+    Finished `bench` profile [optimized] target(s) in 0.05s
+     Running benches/text_shaping_benchmarks.rs (target/release/deps/text_shaping_benchmarks-aff1426bab270cc8)
+Benchmarking ShapeLine/ASCII Fast Path
+Benchmarking ShapeLine/ASCII Fast Path: Warming up for 3.0000 s
+Benchmarking ShapeLine/ASCII Fast Path: Collecting 100 samples in estimated 5.2459 s (1400 iterations)
+Benchmarking ShapeLine/ASCII Fast Path: Analyzing
+ShapeLine/ASCII Fast Path
+                        time:   [3.7167 ms 3.7265 ms 3.7365 ms]
+                        change: [−0.3233% +0.0630% +0.4530%] (p = 0.75 > 0.05)
+                        No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+
+Benchmarking ShapeLine/BiDi Processing
+Benchmarking ShapeLine/BiDi Processing: Warming up for 3.0000 s
+Benchmarking ShapeLine/BiDi Processing: Collecting 100 samples in estimated 5.3267 s (1000 iterations)
+Benchmarking ShapeLine/BiDi Processing: Analyzing
+ShapeLine/BiDi Processing
+                        time:   [5.3197 ms 5.3341 ms 5.3481 ms]
+                        change: [−6.4087% −5.9128% −5.4252%] (p = 0.00 < 0.05)
+                        Performance has improved.
+
+Benchmarking bench_lang_mixed/ShapeLine/Mixed-Language Text
+Benchmarking bench_lang_mixed/ShapeLine/Mixed-Language Text: Warming up for 3.0000 s
+Benchmarking bench_lang_mixed/ShapeLine/Mixed-Language Text: Collecting 10 samples in estimated 6.1679 s (275 iterations)
+Benchmarking bench_lang_mixed/ShapeLine/Mixed-Language Text: Analyzing
+bench_lang_mixed/ShapeLine/Mixed-Language Text
+                        time:   [21.957 ms 22.044 ms 22.124 ms]
+                        change: [−7.8290% −6.8843% −5.9049%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) low mild
+  1 (10.00%) high severe
+
+Benchmarking ShapeLine/Layout Heavy
+Benchmarking ShapeLine/Layout Heavy: Warming up for 3.0000 s
+Benchmarking ShapeLine/Layout Heavy: Collecting 100 samples in estimated 5.1972 s (700 iterations)
+Benchmarking ShapeLine/Layout Heavy: Analyzing
+ShapeLine/Layout Heavy  time:   [7.4024 ms 7.4172 ms 7.4323 ms]
+                        change: [−3.5776% −3.1890% −2.7959%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+
+Benchmarking ShapeLine/Combined Stress
+Benchmarking ShapeLine/Combined Stress: Warming up for 3.0000 s
+Benchmarking ShapeLine/Combined Stress: Collecting 100 samples in estimated 7.3862 s (200 iterations)
+Benchmarking ShapeLine/Combined Stress: Analyzing
+ShapeLine/Combined Stress
+                        time:   [37.224 ms 37.341 ms 37.464 ms]
+                        change: [−4.8337% −3.9787% −3.2388%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+
+Benchmarking BidiParagraphs/ASCII
+Benchmarking BidiParagraphs/ASCII: Warming up for 3.0000 s
+Benchmarking BidiParagraphs/ASCII: Collecting 100 samples in estimated 5.0066 s (1.3M iterations)
+Benchmarking BidiParagraphs/ASCII: Analyzing
+BidiParagraphs/ASCII    time:   [3.8854 µs 3.8967 µs 3.9082 µs]
+                        change: [−2.3830% −1.9968% −1.5736%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+
+Benchmarking BidiParagraphs/Mixed
+Benchmarking BidiParagraphs/Mixed: Warming up for 3.0000 s
+Benchmarking BidiParagraphs/Mixed: Collecting 100 samples in estimated 5.0584 s (121k iterations)
+Benchmarking BidiParagraphs/Mixed: Analyzing
+BidiParagraphs/Mixed    time:   [41.568 µs 41.781 µs 42.111 µs]
+                        change: [−3.3468% −2.7578% −1.9630%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+
