@@ -74,6 +74,16 @@ impl LayoutRun<'_> {
         let mut results = Vec::new();
         let mut range_opt: Option<(f32, f32)> = None;
 
+        // Honor the docstring contract: yield nothing if this run is
+        // outside the cursor range. Without this guard, the per-glyph
+        // `is_selected` check below evaluates to true for every glyph
+        // on out-of-range lines (because both `cursor_*.line != line_i`
+        // conditions short-circuit to true via the OR), causing
+        // selection to bleed across every line outside the selection.
+        if line_i < cursor_start.line || line_i > cursor_end.line {
+            return results.into_iter();
+        }
+
         for glyph in self.glyphs {
             let cluster = &self.text[glyph.start..glyph.end];
             let total = cluster.grapheme_indices(true).count().max(1);
