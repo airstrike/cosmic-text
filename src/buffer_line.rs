@@ -230,13 +230,19 @@ impl BufferLine {
                 .add_span_from_attrs(len..len + other.text().len(), &other.attrs_list.defaults());
         }
 
-        for (other_range, _over) in other.attrs_list.spans_iter() {
-            // Add previous attrs spans. We resolve through `other`'s
-            // defaults to preserve the span's visual outcome, then
-            // re-diff against `self`'s defaults inside `add_span_from_attrs`.
-            let resolved = other.attrs_list.get_span(other_range.start);
+        // When both lines share defaults, sparse overrides mean the same
+        // thing on either side, so we can copy them directly. Otherwise
+        // we resolve through `other`'s defaults to preserve the span's
+        // visual outcome, then re-diff against `self`'s defaults.
+        let same_defaults = other.attrs_list.defaults() == self.attrs_list.defaults();
+        for (other_range, over) in other.attrs_list.spans_iter() {
             let range = other_range.start + len..other_range.end + len;
-            self.attrs_list.add_span_from_attrs(range, &resolved);
+            if same_defaults {
+                self.attrs_list.add_span(range, over);
+            } else {
+                let resolved = other.attrs_list.get_span(other_range.start);
+                self.attrs_list.add_span_from_attrs(range, &resolved);
+            }
         }
 
         self.reset();

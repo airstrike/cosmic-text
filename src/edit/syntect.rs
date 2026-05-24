@@ -8,8 +8,9 @@ use syntect::highlighting::{
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
 use crate::{
-    Action, AttrsList, BorrowedWithFontSystem, BufferRef, Change, Color, Cursor, Edit, Editor,
-    FontSystem, Renderer, Selection, Shaping, Style, UnderlineStyle, Weight,
+    Action, AttrsList, AttrsOverride, BorrowedWithFontSystem, BufferRef, Change, Color, Cursor,
+    Edit, Editor, FontSystem, Override, Renderer, Selection, Shaping, Style, TextDecoration,
+    UnderlineStyle, Weight,
 };
 
 pub use syntect::highlighting::Theme as SyntaxTheme;
@@ -369,35 +370,43 @@ impl<'buffer> Edit<'buffer> for SyntaxEditor<'_, 'buffer> {
 
                 let attrs = line.attrs_list().defaults();
                 let mut attrs_list = AttrsList::new(&attrs);
-                let original_attrs = attrs.clone(); // Store a clone for comparison
                 for (style, _, range) in ranges {
-                    let span_attrs = attrs
-                        .clone() // Clone attrs for modification
-                        .color(Color::rgba(
+                    // Build the sparse override directly. Syntect provides
+                    // foreground color, italic/bold/underline flags;
+                    // everything else inherits from line defaults.
+                    //
+                    // Note on text_decoration: when UNDERLINE is off we
+                    // leave it `Inherit` rather than force-clearing — so
+                    // strikethrough/overline from defaults still apply.
+                    // Syntect doesn't combine UNDERLINE with other
+                    // decorations, so this is a behavioral no-op in
+                    // practice.
+                    let mut over = AttrsOverride {
+                        color: Override::Set(Some(Color::rgba(
                             style.foreground.r,
                             style.foreground.g,
                             style.foreground.b,
                             style.foreground.a,
-                        ))
-                        //TODO: background
-                        .style(if style.font_style.contains(FontStyle::ITALIC) {
+                        ))),
+                        style: Override::Set(if style.font_style.contains(FontStyle::ITALIC) {
                             Style::Italic
                         } else {
                             Style::Normal
-                        })
-                        .weight(if style.font_style.contains(FontStyle::BOLD) {
+                        }),
+                        weight: Override::Set(if style.font_style.contains(FontStyle::BOLD) {
                             Weight::BOLD
                         } else {
                             Weight::NORMAL
-                        })
-                        .underline(if style.font_style.contains(FontStyle::UNDERLINE) {
-                            UnderlineStyle::Single
-                        } else {
-                            UnderlineStyle::None
+                        }),
+                        ..Default::default()
+                    };
+                    if style.font_style.contains(FontStyle::UNDERLINE) {
+                        over.text_decoration = Override::Set(TextDecoration {
+                            underline: UnderlineStyle::Single,
+                            ..TextDecoration::new()
                         });
-                    if span_attrs != original_attrs {
-                        attrs_list.add_span_from_attrs(range, &span_attrs);
                     }
+                    attrs_list.add_span(range, &over);
                 }
 
                 // Update line attributes. This operation only resets if the line changes
