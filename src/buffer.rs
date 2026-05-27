@@ -54,6 +54,21 @@ pub struct LayoutRun<'a> {
     pub line_w: f32,
     /// X offset of the line start (margin + alignment)
     pub x_offset: f32,
+    /// Maximum ascent of any glyph in this run, in logical pixels.
+    ///
+    /// The actual visible top of glyphs on this run is
+    /// `line_y - max_ascent`, which may be above `line_top` when the
+    /// effective `line_height` is shorter than `max_ascent + max_descent`
+    /// (e.g. user-specified compact line spacing). Consumers that need
+    /// to size clip regions, selection highlights, or content bounds
+    /// around the *visible* glyph extent use this rather than
+    /// `line_height` (which is the layout slot, not the inked area).
+    pub max_ascent: f32,
+    /// Maximum descent of any glyph in this run, in logical pixels.
+    ///
+    /// The actual visible bottom of glyphs on this run is
+    /// `line_y + max_descent`. See [`Self::max_ascent`] for context.
+    pub max_descent: f32,
 }
 
 impl LayoutRun<'_> {
@@ -298,6 +313,8 @@ impl<'b> Iterator for LayoutRunIter<'b> {
                     line_height,
                     line_w: layout_line.w,
                     x_offset: layout_line.x_offset,
+                    max_ascent: layout_line.max_ascent,
+                    max_descent: layout_line.max_descent,
                 });
             }
 
