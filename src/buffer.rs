@@ -231,6 +231,10 @@ pub struct LayoutRunIter<'b> {
     height_opt: Option<f32>,
     line_height: f32,
     scroll: f32,
+    /// Empty space reserved above the first buffer line (line 0). Shifts
+    /// line 0's `line_top` down so the top of the document sits below the
+    /// viewport top. See [`VerticalPad`].
+    pad_top: f32,
     line_i: usize,
     layout_i: usize,
     total_height: f32,
@@ -245,6 +249,7 @@ impl<'b> LayoutRunIter<'b> {
             buffer.metrics.line_height,
             buffer.scroll.vertical,
             buffer.scroll.line,
+            buffer.vertical_pad.top,
         )
     }
 
@@ -254,12 +259,14 @@ impl<'b> LayoutRunIter<'b> {
         line_height: f32,
         scroll: f32,
         start: usize,
+        pad_top: f32,
     ) -> Self {
         Self {
             lines,
             height_opt,
             line_height,
             scroll,
+            pad_top,
             line_i: start,
             layout_i: 0,
             total_height: 0.0,
@@ -278,6 +285,13 @@ impl<'b> Iterator for LayoutRunIter<'b> {
 
             // Add margin_top before the first layout line of this buffer line
             if self.layout_i == 0 {
+                // Top padding sits above line 0 only. When iteration starts
+                // partway down (scroll.line > 0), line 0 is above the visible
+                // range and the pad has already scrolled off, so skip it.
+                if self.line_i == 0 {
+                    self.line_top += self.pad_top;
+                    self.total_height += self.pad_top;
+                }
                 self.line_top += line.margin_top();
                 self.total_height += line.margin_top();
             }
@@ -371,6 +385,25 @@ impl fmt::Display for Metrics {
     }
 }
 
+/// Vertical padding reserved *inside* the buffer's scroll extent: empty
+/// space above the first line and below the last line that participates
+/// in the scroll like content, rather than shrinking (and clipping) the
+/// viewport. Both fields default to `0.0`, leaving scroll behavior
+/// unchanged unless a caller opts in via [`Buffer::set_vertical_pad`].
+///
+/// Acts exactly as if there were a `top` margin above line 0 and a
+/// `bottom` margin below the last line: it contributes to the content
+/// height the scroll clamp measures, so at rest the first line sits
+/// `top` below the viewport top, and at maximum scroll the last line
+/// sits `bottom` above the viewport bottom.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct VerticalPad {
+    /// Pixels of empty space above the first line.
+    pub top: f32,
+    /// Pixels of empty space below the last line.
+    pub bottom: f32,
+}
+
 /// A buffer of text that is shaped and laid out
 #[derive(Debug)]
 pub struct Buffer {
@@ -379,6 +412,7 @@ pub struct Buffer {
     metrics: Metrics,
     width_opt: Option<f32>,
     height_opt: Option<f32>,
+    vertical_pad: VerticalPad,
     scroll: Scroll,
     /// True if a redraw is requires. Set to false after processing
     redraw: bool,
@@ -398,6 +432,7 @@ impl Clone for Buffer {
             metrics: self.metrics,
             width_opt: self.width_opt,
             height_opt: self.height_opt,
+            vertical_pad: self.vertical_pad,
             scroll: self.scroll,
             redraw: self.redraw,
             wrap: self.wrap,
@@ -429,6 +464,7 @@ impl Buffer {
             metrics,
             width_opt: None,
             height_opt: None,
+            vertical_pad: VerticalPad::default(),
             scroll: Scroll::default(),
             redraw: false,
             wrap: Wrap::WordOrGlyph,
@@ -535,6 +571,14 @@ impl Buffer {
                     .unwrap_or(metrics.line_height)
                 + line_margins
         };
+
+        // When the cursor sits on the last line, reserve the bottom pad
+        // below it so cursor-follow scrolling mirrors the resting state
+        // (last line `pad.bottom` above the viewport bottom) rather than
+        // pinning the cursor flush to the edge.
+        if layout_cursor.line + 1 == self.lines.len() {
+            total_height += self.vertical_pad.bottom;
+        }
 
         if !adjust_scroll {
             // Shaping done above via layout_cursor / line_layout; skip scroll.
@@ -703,6 +747,11 @@ impl Buffer {
                 }
             }
 
+            // Bottom padding extends the content the clamp measures, so the
+            // scroll equilibrium leaves `pad.bottom` of space below the last
+            // line instead of resting it flush against the viewport bottom.
+            total_height += self.vertical_pad.bottom;
+
             if total_height < scroll_end && self.scroll.line > 0 {
                 // Need to scroll up to stay inside of buffer
                 self.scroll.vertical -= scroll_end - total_height;
@@ -850,6 +899,23 @@ impl Buffer {
         if monospace_width != self.monospace_width {
             self.monospace_width = monospace_width;
             self.dirty |= DirtyFlags::RELAYOUT;
+            self.redraw = true;
+        }
+    }
+
+    /// Get the current [`VerticalPad`].
+    pub const fn vertical_pad(&self) -> VerticalPad {
+        self.vertical_pad
+    }
+
+    /// Set the [`VerticalPad`] — empty space reserved above the first line
+    /// and below the last line that scrolls with content. See [`VerticalPad`].
+    pub fn set_vertical_pad(&mut self, vertical_pad: VerticalPad) {
+        if vertical_pad != self.vertical_pad {
+            self.vertical_pad = vertical_pad;
+            // Layout is unaffected; only the scroll extent changes, so a
+            // re-clamp + redraw suffices (no reshape/relayout).
+            self.dirty |= DirtyFlags::SCROLL;
             self.redraw = true;
         }
     }
