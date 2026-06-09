@@ -1,0 +1,24 @@
+Status-quo baseline (branch feat/decoration-color-rendertime, BEFORE decoupling)
+Bench: benches/decoration_resolution.rs  (criterion median of [low mid high])
+Machine: darwin/arm64. Numbers are the REAL buffer pipeline for *_reshape rows.
+
+decoration/perframe/current_baked/80x1    ~  (see run; baked read, static doc)
+decoration/perframe/A_live_opt/80x6       14.91 µs   (single-pass live resolver, screenful)
+decoration/perframe/current_baked/80x6    46.18 µs   (baked read)
+decoration/perframe/A_live_naive/80x6     ~ (naive O(spans*glyphs))
+decoration/perframe/current_baked/400x6   55.28 µs   (baked read, 400 lines — full doc, not viewport)
+decoration/perframe/A_live_opt/400x6      73.67 µs   (live resolver, full doc)
+decoration/perframe/A_live_naive/400x6    230.66 µs
+
+decoration/toggle/current_reshape         208.13 µs  <-- REAL: deco change reshapes today
+decoration/toggle/A_mutate                  0.169 µs <-- target: plain attrs mutation, no reshape
+decoration/toggle/B_recompute               1.067 µs (fallback overlay recompute)
+
+color/toggle/current_reshape              208.70 µs  <-- REAL: color change ALSO reshapes today (hypothesis CONFIRMED)
+color/toggle/A_mutate                       0.168 µs <-- target
+
+Conclusion:
+- Both a decoration-only and a color-only change reshape the line today (~208 µs).
+- Approach A reduces each to a ~0.17 µs attrs mutation (>1000x), no reshape.
+- Per-frame live resolution is within ~1.3x of the baked read at full-doc scale,
+  and at viewport scale (80 lines) is comparable or cheaper. Viewport-bounded.

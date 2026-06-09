@@ -22,8 +22,8 @@
 use cosmic_text as ct;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use ct::{
-    Attrs, AttrsList, AttrsOverride, Buffer, FontSystem, GlyphDecorationData, Metrics, Override,
-    Shaping, TextDecoration, UnderlineStyle,
+    Attrs, AttrsList, AttrsOverride, Buffer, Color, FontSystem, GlyphDecorationData, Metrics,
+    Override, Shaping, TextDecoration, UnderlineStyle,
 };
 use std::collections::HashMap;
 use std::hint::black_box;
@@ -80,6 +80,13 @@ fn underline_override() -> AttrsOverride {
             underline: UnderlineStyle::Single,
             ..TextDecoration::new()
         }),
+        ..AttrsOverride::default()
+    }
+}
+
+fn color_override() -> AttrsOverride {
+    AttrsOverride {
+        color: Override::Set(Some(Color::rgb(0x42, 0x85, 0xf4))),
         ..AttrsOverride::default()
     }
 }
@@ -420,5 +427,74 @@ fn bench_toggle(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_perframe, bench_toggle);
+/// Status-quo + Approach-A cost of a COLOR-only change on one span.
+///
+/// `current_reshape` mutates the line's `AttrsList` with a color-only override
+/// and reshapes (the status quo: `color` is in the shape cache key and in the
+/// `set_attrs_list` equality check). `A_mutate` is the plain attrs mutation A
+/// reduces it to.
+fn bench_color_toggle(c: &mut Criterion) {
+    let n_lines = 80usize;
+    let spans = 6usize;
+    let target = n_lines / 2;
+
+    let mut group = c.benchmark_group("color/toggle");
+    group.sample_size(50);
+
+    {
+        let mut fs = FontSystem::new();
+        let doc = build_doc(n_lines, spans);
+        let (mut buffer, _line_lists, _cache) = setup(&mut fs, &doc);
+        let base = Attrs::new();
+
+        let list_off = AttrsList::new(&base);
+        let over = color_override();
+        let mut list_on = AttrsList::new(&base);
+        for r in &doc.decorations[target] {
+            list_on.add_span(r.clone(), &over);
+        }
+
+        let mut toggle = false;
+        group.bench_function("current_reshape", |b| {
+            b.iter(|| {
+                toggle = !toggle;
+                let list = if toggle {
+                    list_on.clone()
+                } else {
+                    list_off.clone()
+                };
+                buffer.lines[target].set_attrs_list(list);
+                buffer.shape_until_scroll(&mut fs, false);
+                black_box(buffer.layout_runs().count());
+            })
+        });
+    }
+
+    {
+        let mut fs = FontSystem::new();
+        let doc = build_doc(n_lines, spans);
+        let (_buffer, mut line_lists, _cache) = setup(&mut fs, &doc);
+        let over = color_override();
+        let ranges = doc.decorations[target].clone();
+
+        let mut toggle = false;
+        group.bench_function("A_mutate", |b| {
+            b.iter(|| {
+                toggle = !toggle;
+                let al = &mut line_lists[target];
+                al.clear_spans();
+                if toggle {
+                    for r in &ranges {
+                        al.add_span(r.clone(), &over);
+                    }
+                }
+                black_box(&*al);
+            })
+        });
+    }
+
+    group.finish();
+}
+
+criterion_group!(benches, bench_perframe, bench_toggle, bench_color_toggle);
 criterion_main!(benches);
