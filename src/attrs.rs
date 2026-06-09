@@ -1066,6 +1066,31 @@ impl AttrsList {
         }
     }
 
+    /// Resolve the [`TextDecoration`] at `index` — the span override (if any)
+    /// resolved against the line defaults — without cloning fonts or features.
+    ///
+    /// This is the allocation-free point lookup a render-time resolver wants:
+    /// unlike [`Self::get_span`] it touches only the `Copy` decoration field,
+    /// so it is cheap to call per glyph.
+    pub fn text_decoration_at(&self, index: usize) -> TextDecoration {
+        match self.spans.get(&index).map(|over| &over.text_decoration) {
+            Some(Override::Set(td)) => *td,
+            _ => self.defaults.text_decoration,
+        }
+    }
+
+    /// Resolve the color at `index` — the span override (if any) resolved
+    /// against the line defaults — without cloning fonts or features.
+    ///
+    /// Allocation-free companion to [`Self::text_decoration_at`] for a
+    /// render-time per-glyph color resolver.
+    pub fn color_at(&self, index: usize) -> Option<Color> {
+        match self.spans.get(&index).map(|over| &over.color) {
+            Some(Override::Set(c)) => *c,
+            _ => self.defaults.color_opt,
+        }
+    }
+
     /// Split attributes list at an offset
     #[allow(clippy::missing_panics_doc)]
     pub fn split_off(&mut self, index: usize) -> Self {
@@ -1326,6 +1351,33 @@ mod tests {
         let small = AttrsList::new(&base);
         let big = AttrsList::new(&base.metrics(Metrics::new(20.0, 24.0)));
         assert!(!small.eq_for_shaping(&big));
+    }
+
+    #[test]
+    fn text_decoration_at_resolves_override_then_default() {
+        let base = Attrs::new();
+        let mut list = AttrsList::new(&base);
+        list.add_span(2..5, &underline_over());
+
+        // Inside the span: the override.
+        assert_eq!(list.text_decoration_at(3).underline, UnderlineStyle::Single);
+        // Outside the span: the (plain) default.
+        assert_eq!(list.text_decoration_at(0).underline, UnderlineStyle::None);
+    }
+
+    #[test]
+    fn color_at_resolves_override_then_default() {
+        let base = Attrs::new().color(Color(0xff_00_00_00));
+        let mut list = AttrsList::new(&base);
+        list.add_span(
+            2..5,
+            &AttrsOverride {
+                color: Override::Set(Some(Color(0x00_00_ff_ff))),
+                ..Default::default()
+            },
+        );
+        assert_eq!(list.color_at(3), Some(Color(0x00_00_ff_ff)));
+        assert_eq!(list.color_at(0), Some(Color(0xff_00_00_00)));
     }
 
     #[test]
