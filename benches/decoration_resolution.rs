@@ -496,5 +496,85 @@ fn bench_color_toggle(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_perframe, bench_toggle, bench_color_toggle);
+/// The REAL post-implementation proof: drive the actual buffer pipeline
+/// (`BufferLine::set_attrs_list` + `Buffer::shape_until_scroll`) the way the
+/// editor does on a toggle, and time it.
+///
+/// - `decoration_toggle` flips an underline-only override. Under Approach A
+///   `set_attrs_list` detects a render-time-only diff and does not reshape, so
+///   `shape_until_scroll` is a no-op cache hit — this should collapse from the
+///   status-quo ~200 µs reshape to sub-µs.
+/// - `font_size_toggle` flips the line-defaults metrics — a genuine reshape,
+///   the control that must stay ~200 µs.
+fn bench_real_pipeline(c: &mut Criterion) {
+    let n_lines = 80usize;
+    let spans = 6usize;
+    let target = n_lines / 2;
+
+    let mut group = c.benchmark_group("real_pipeline/toggle");
+    group.sample_size(50);
+
+    {
+        let mut fs = FontSystem::new();
+        let doc = build_doc(n_lines, spans);
+        let (mut buffer, _line_lists, _cache) = setup(&mut fs, &doc);
+        let base = Attrs::new();
+
+        let list_off = AttrsList::new(&base);
+        let over = underline_override();
+        let mut list_on = AttrsList::new(&base);
+        for r in &doc.decorations[target] {
+            list_on.add_span(r.clone(), &over);
+        }
+
+        let mut toggle = false;
+        group.bench_function("decoration_toggle", |b| {
+            b.iter(|| {
+                toggle = !toggle;
+                let list = if toggle {
+                    list_on.clone()
+                } else {
+                    list_off.clone()
+                };
+                let reshaped = buffer.lines[target].set_attrs_list(list);
+                // Under A this is false — assert it so the bench also documents
+                // the no-reshape property.
+                debug_assert!(!reshaped, "decoration toggle must not reshape under A");
+                buffer.shape_until_scroll(&mut fs, false);
+                black_box(buffer.layout_runs().count());
+            })
+        });
+    }
+
+    {
+        let mut fs = FontSystem::new();
+        let doc = build_doc(n_lines, spans);
+        let (mut buffer, _line_lists, _cache) = setup(&mut fs, &doc);
+
+        let small = AttrsList::new(&Attrs::new());
+        let big = AttrsList::new(&Attrs::new().metrics(Metrics::new(20.0, 26.0)));
+
+        let mut toggle = false;
+        group.bench_function("font_size_toggle", |b| {
+            b.iter(|| {
+                toggle = !toggle;
+                let list = if toggle { big.clone() } else { small.clone() };
+                let reshaped = buffer.lines[target].set_attrs_list(list);
+                debug_assert!(reshaped, "font-size toggle must reshape (control)");
+                buffer.shape_until_scroll(&mut fs, false);
+                black_box(buffer.layout_runs().count());
+            })
+        });
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_perframe,
+    bench_toggle,
+    bench_color_toggle,
+    bench_real_pipeline
+);
 criterion_main!(benches);

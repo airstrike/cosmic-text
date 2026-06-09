@@ -1,0 +1,25 @@
+Approach A — REAL pipeline results (branch feat/decoration-color-rendertime)
+Bench: benches/decoration_resolution.rs, group real_pipeline/toggle
+Machine: darwin/arm64. Criterion median [low mid high].
+
+Drives the actual editor toggle path: BufferLine::set_attrs_list +
+Buffer::shape_until_scroll, exactly as a UI toggle does.
+
+real_pipeline/toggle/decoration_toggle   778 ns    <-- A: reshape-free
+real_pipeline/toggle/font_size_toggle    207.7 µs  <-- control: still reshapes
+
+Compare to status-quo baseline (status-quo-decoration-color.txt):
+decoration/toggle/current_reshape        208.1 µs  (status quo: deco reshaped)
+
+=> A collapses a decoration toggle from ~208 µs to ~0.78 µs (~267x) on the
+   REAL pipeline, with NO reshape (set_attrs_list returns false; the
+   debug_assert in the bench enforces it). The font-size control still
+   reshapes at ~208 µs, confirming shaping-relevant changes are unaffected.
+
+Per-frame live resolution (model, perframe group, unchanged):
+  A_live_opt 80x6 = 14.9 µs vs current_baked 46.2 µs (viewport scale)
+  A_live_opt 400x6 = 73.7 µs vs current_baked 55.3 µs (full-doc; ~1.3x)
+  Viewport-bounded; trivial in absolute terms.
+
+Color: still reshapes by design in this increment (color stays baked at
+shape time). See report — live color is the deferred axis.
