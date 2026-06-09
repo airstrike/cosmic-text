@@ -684,12 +684,12 @@ impl AttrsOwned {
 
     /// Equality over only the fields that affect shaping and layout.
     ///
-    /// Ignores `text_decoration`, which is resolved at draw and never feeds
-    /// shaping or layout geometry. `color_opt` is still compared because the
-    /// per-glyph color is currently baked at shape time.
+    /// Ignores the render-time fields `color_opt` and `text_decoration`:
+    /// neither feeds shaping or layout geometry. Color is a per-glyph tint
+    /// refreshed in place by [`crate::BufferLine`]'s recolor path on a
+    /// color-only change, so a color change must not reshape.
     pub fn eq_for_shaping(&self, other: &Self) -> bool {
-        self.color_opt == other.color_opt
-            && self.family_owned == other.family_owned
+        self.family_owned == other.family_owned
             && self.stretch == other.stretch
             && self.style == other.style
             && self.weight == other.weight
@@ -861,17 +861,13 @@ impl AttrsOverride {
 
     /// Equality over only the fields that affect shaping and layout.
     ///
-    /// Ignores `text_decoration`, which is resolved at draw and never feeds
-    /// shaping or the layout geometry. Used by
-    /// [`AttrsList::eq_for_shaping`] so a decoration-only change does not
-    /// invalidate shaping.
-    ///
-    /// `color` is still treated as shaping-relevant here: the per-glyph color
-    /// is currently baked at shape time, so a color change must still reshape
-    /// until live color resolution lands.
+    /// Ignores the render-time fields `color` and `text_decoration`: neither
+    /// feeds shaping or the layout geometry. Used by
+    /// [`AttrsList::eq_for_shaping`] so a decoration- or color-only change
+    /// does not invalidate shaping (color is refreshed in place via the
+    /// recolor path instead).
     pub fn eq_for_shaping(&self, other: &Self) -> bool {
-        self.color == other.color
-            && self.metrics == other.metrics
+        self.metrics == other.metrics
             && self.letter_spacing == other.letter_spacing
             && self.family == other.family
             && self.stretch == other.stretch
@@ -886,13 +882,10 @@ impl AttrsOverride {
 
     /// Returns `true` if every *shaping-relevant* field is
     /// [`Override::Inherit`] — i.e. the override only differs from the
-    /// defaults (if at all) in the render-time field `text_decoration`, and
-    /// so has no effect on shaping or layout.
-    ///
-    /// `color` counts as shaping-relevant for now (see [`Self::eq_for_shaping`]).
+    /// defaults (if at all) in the render-time fields `color` and
+    /// `text_decoration`, and so has no effect on shaping or layout.
     pub fn is_empty_for_shaping(&self) -> bool {
-        self.color.is_inherit()
-            && self.metrics.is_inherit()
+        self.metrics.is_inherit()
             && self.letter_spacing.is_inherit()
             && self.family.is_inherit()
             && self.stretch.is_inherit()
@@ -1041,6 +1034,27 @@ impl AttrsList {
         a.iter()
             .zip(b.iter())
             .all(|((ra, oa), (rb, ob))| ra == rb && oa.eq_for_shaping(ob))
+    }
+
+    /// True if `self` and `other` resolve to the same per-position color
+    /// everywhere — i.e. they differ (if at all) only in non-color fields.
+    ///
+    /// Lets [`crate::BufferLine::set_attrs_list`] skip the recolor pass when a
+    /// change is confined to other render-time fields (e.g. a decoration-only
+    /// toggle). Conservative: any structural difference in the set-color spans
+    /// reports unequal, so at worst it recolors when it needn't.
+    pub fn eq_for_color(&self, other: &Self) -> bool {
+        if self.defaults.color_opt != other.defaults.color_opt {
+            return false;
+        }
+        let color_spans = |list: &Self| {
+            list.spans
+                .iter()
+                .filter(|(_, over)| over.color.is_set())
+                .map(|(range, over)| (range.clone(), over.color))
+                .collect::<Vec<_>>()
+        };
+        color_spans(self) == color_spans(other)
     }
 
     /// Add an attribute span from a full [`Attrs`] value, computing the
@@ -1314,9 +1328,9 @@ mod tests {
     }
 
     #[test]
-    fn color_only_span_still_differs_for_shaping() {
-        // Color is still baked at shape time, so it remains shaping-relevant
-        // until live color resolution lands.
+    fn color_only_span_is_shaping_equal_but_color_differs() {
+        // Color is a render-time tint: a color-only span is invisible to
+        // shaping (no reshape) but is caught by the color predicate (recolor).
         let base = Attrs::new();
         let plain = AttrsList::new(&base);
         let mut colored = AttrsList::new(&base);
@@ -1327,7 +1341,14 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(!plain.eq_for_shaping(&colored));
+        assert!(
+            plain.eq_for_shaping(&colored),
+            "color must not affect shaping"
+        );
+        assert!(
+            !plain.eq_for_color(&colored),
+            "color difference must be seen"
+        );
     }
 
     #[test]

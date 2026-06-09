@@ -144,11 +144,44 @@ impl BufferLine {
             return false;
         }
         let reshape = !attrs_list.eq_for_shaping(&self.attrs_list);
+        let recolor = !reshape && !attrs_list.eq_for_color(&self.attrs_list);
         self.attrs_list = attrs_list;
         if reshape {
             self.reset_shaping();
+        } else if recolor {
+            self.recolor();
         }
         reshape
+    }
+
+    /// Refresh each cached glyph's color from the current `attrs_list` without
+    /// reshaping or re-laying-out.
+    ///
+    /// Color is a render-time tint: it never affects glyph selection or
+    /// position, so when a color-only change lands the shaped geometry is
+    /// still valid and only `color_opt` needs rewriting. Touches the cached
+    /// shape line (the source of truth a later re-layout reads) and the cached
+    /// layout lines (what the renderer reads) in place. A no-op while either
+    /// cache is `Empty`/`Unused` — the next shape/layout derives the color
+    /// fresh from `attrs_list`.
+    fn recolor(&mut self) {
+        let attrs_list = &self.attrs_list;
+        if let Some(shape) = self.shape_opt.get_mut() {
+            for span in &mut shape.spans {
+                for word in &mut span.words {
+                    for glyph in &mut word.glyphs {
+                        glyph.color_opt = attrs_list.color_at(glyph.start);
+                    }
+                }
+            }
+        }
+        if let Some(layout) = self.layout_opt.get_mut() {
+            for line in layout.iter_mut() {
+                for glyph in &mut line.glyphs {
+                    glyph.color_opt = attrs_list.color_at(glyph.start);
+                }
+            }
+        }
     }
 
     /// Get the Text alignment
