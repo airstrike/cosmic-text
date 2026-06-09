@@ -5,8 +5,8 @@ use alloc::{string::String, vec::Vec};
 use core::mem;
 
 use crate::{
-    Align, Attrs, AttrsList, Cached, Ellipsize, FontSystem, Hinting, LayoutLine, LayoutRunIter,
-    LineEnding, ShapeLine, Shaping, Wrap,
+    Align, Attrs, AttrsList, Cached, Color, Ellipsize, FontSystem, Hinting, LayoutLine,
+    LayoutRunIter, LineEnding, ShapeLine, Shaping, Wrap,
 };
 
 /// A line (or paragraph) of text that is shaped and laid out
@@ -182,6 +182,41 @@ impl BufferLine {
                 }
             }
         }
+    }
+
+    /// Recolor the cached glyphs tagged with `metadata` without reshaping.
+    ///
+    /// `Some(color)` tints them to `color`; `None` restores each glyph's color
+    /// from the line's `attrs_list`. This is the render-time hook for transient
+    /// per-span effects (e.g. tinting a hovered link): like [`Self::recolor`]
+    /// it mutates only `color_opt` on the cached shape and layout glyphs and
+    /// never calls `shape`. Returns `true` if any glyph matched.
+    pub fn recolor_metadata(&mut self, metadata: usize, color: Option<Color>) -> bool {
+        let attrs_list = &self.attrs_list;
+        let mut matched = false;
+        if let Some(shape) = self.shape_opt.get_mut() {
+            for span in &mut shape.spans {
+                for word in &mut span.words {
+                    for glyph in &mut word.glyphs {
+                        if glyph.metadata == metadata {
+                            glyph.color_opt = color.or_else(|| attrs_list.color_at(glyph.start));
+                            matched = true;
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(layout) = self.layout_opt.get_mut() {
+            for line in layout.iter_mut() {
+                for glyph in &mut line.glyphs {
+                    if glyph.metadata == metadata {
+                        glyph.color_opt = color.or_else(|| attrs_list.color_at(glyph.start));
+                        matched = true;
+                    }
+                }
+            }
+        }
+        matched
     }
 
     /// Get the Text alignment

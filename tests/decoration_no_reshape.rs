@@ -179,3 +179,54 @@ fn color_change_does_not_reshape_and_recolors() {
     }
     assert!(saw_blue, "expected glyphs inside the recolored range");
 }
+
+#[test]
+fn recolor_metadata_tints_span_without_reshaping() {
+    // The render-time hover hook: tint the glyphs of one span (by metadata)
+    // and restore them, with the shaped geometry left untouched.
+    let mut fs = FontSystem::new();
+    let mut buffer = Buffer::new(&mut fs, Metrics::new(14.0, 20.0));
+    buffer.set_size(Some(400.0), None);
+    buffer.set_rich_text(
+        [
+            ("hello ", Attrs::new().metadata(0)),
+            ("link", Attrs::new().metadata(1)),
+            (" world", Attrs::new().metadata(2)),
+        ],
+        &Attrs::new(),
+        Shaping::Advanced,
+        None,
+    );
+    buffer.shape_until_scroll(&mut fs, false);
+    let before = glyph_identities(&buffer);
+
+    let blue = Color::rgb(0x42, 0x85, 0xf4);
+    assert!(
+        buffer.recolor_metadata(1, Some(blue)),
+        "expected glyphs tagged with metadata 1"
+    );
+
+    // Geometry is untouched: a recolor never reshapes.
+    assert_eq!(
+        before,
+        glyph_identities(&buffer),
+        "recolor_metadata must not reshape"
+    );
+    for run in buffer.layout_runs() {
+        for g in run.glyphs {
+            if g.metadata == 1 {
+                assert_eq!(g.color_opt, Some(blue), "tagged glyph not tinted");
+            }
+        }
+    }
+
+    // None restores the span's attrs color (here the default, i.e. no color).
+    buffer.recolor_metadata(1, None);
+    for run in buffer.layout_runs() {
+        for g in run.glyphs {
+            if g.metadata == 1 {
+                assert_eq!(g.color_opt, None, "tint not restored");
+            }
+        }
+    }
+}

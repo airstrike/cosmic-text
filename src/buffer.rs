@@ -668,6 +668,23 @@ impl Buffer {
     /// [`layout_runs`]: Self::layout_runs
     /// [`hit`]: Self::hit
     #[allow(clippy::missing_panics_doc)]
+    /// Recolor every cached glyph tagged with `metadata` without reshaping.
+    ///
+    /// `Some(color)` tints them; `None` restores each glyph's color from its
+    /// line's attrs. A render-time hook for transient per-span effects such as
+    /// tinting a hovered link: it touches only `color_opt` on already-shaped
+    /// glyphs, so it never reshapes or re-lays-out. Returns `true` if any glyph
+    /// matched. Spans tagged via [`Attrs::metadata`] carry the tag onto their
+    /// glyphs, so the metadata is the span identifier to pass here.
+    pub fn recolor_metadata(&mut self, metadata: usize, color: Option<Color>) -> bool {
+        let mut matched = false;
+        for line in &mut self.lines {
+            matched |= line.recolor_metadata(metadata, color);
+        }
+        matched
+    }
+
+    #[allow(clippy::missing_panics_doc)]
     pub fn shape_until_scroll(&mut self, font_system: &mut FontSystem, prune: bool) {
         if !self.resolve_dirty() {
             return;
