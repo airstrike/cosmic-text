@@ -444,24 +444,36 @@ fn shape_run_cached(
     span_rtl: bool,
     font_size: f32,
 ) {
-    use crate::{AttrsOwned, ShapeRunKey};
+    use crate::{AttrsOwned, Override, ShapeRunKey, TextDecoration};
 
     let run_range = start_run..end_run;
+
+    // The shape cache key must not carry `text_decoration`: it never affects
+    // shaping, and including it would split cache entries that shape
+    // identically and reshape on a decoration change. Normalise it out of the
+    // key inputs. (`color` stays in the key for now — per-glyph color is still
+    // baked at shape time; it leaves the key when live color resolution lands.)
+    let mut default_attrs = AttrsOwned::new(&attrs_list.defaults());
+    default_attrs.text_decoration = TextDecoration::new();
+
     let mut key = ShapeRunKey {
         text: line[run_range.clone()].to_string(),
-        default_attrs: AttrsOwned::new(&attrs_list.defaults()),
+        default_attrs,
         attrs_spans: Vec::new(),
     };
     for (attrs_range, over) in attrs_list.spans.overlapping(&run_range) {
-        if over.is_empty() {
-            // Skip overrides with no effect against the line defaults.
+        if over.is_empty_for_shaping() {
+            // Skip overrides that only touch render-time fields (or nothing) —
+            // they have no effect on shaping against the line defaults.
             continue;
         }
         let start = max(attrs_range.start, start_run).saturating_sub(start_run);
         let end = min(attrs_range.end, end_run).saturating_sub(start_run);
         if end > start {
             let range = start..end;
-            key.attrs_spans.push((range, over.clone()));
+            let mut over = over.clone();
+            over.text_decoration = Override::Inherit;
+            key.attrs_spans.push((range, over));
         }
     }
     if let Some(cache_glyphs) = font_system.shape_run_cache.get(&key) {

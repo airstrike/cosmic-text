@@ -663,6 +663,26 @@ impl AttrsOwned {
             optical_size: self.optical_size,
         }
     }
+
+    /// Equality over only the fields that affect shaping and layout.
+    ///
+    /// Ignores `text_decoration`, which is resolved at draw and never feeds
+    /// shaping or layout geometry. `color_opt` is still compared because the
+    /// per-glyph color is currently baked at shape time.
+    pub fn eq_for_shaping(&self, other: &Self) -> bool {
+        self.color_opt == other.color_opt
+            && self.family_owned == other.family_owned
+            && self.stretch == other.stretch
+            && self.style == other.style
+            && self.weight == other.weight
+            && self.metadata == other.metadata
+            && self.cache_key_flags == other.cache_key_flags
+            && self.metrics_opt == other.metrics_opt
+            && self.letter_spacing_opt == other.letter_spacing_opt
+            && self.font_features == other.font_features
+            && self.font_variations == other.font_variations
+            && self.optical_size == other.optical_size
+    }
 }
 
 /// One field of an [`AttrsOverride`]: either inherit the value from
@@ -821,6 +841,52 @@ impl AttrsOverride {
         }
     }
 
+    /// Equality over only the fields that affect shaping and layout.
+    ///
+    /// Ignores `text_decoration`, which is resolved at draw and never feeds
+    /// shaping or the layout geometry. Used by
+    /// [`AttrsList::eq_for_shaping`] so a decoration-only change does not
+    /// invalidate shaping.
+    ///
+    /// `color` is still treated as shaping-relevant here: the per-glyph color
+    /// is currently baked at shape time, so a color change must still reshape
+    /// until live color resolution lands.
+    pub fn eq_for_shaping(&self, other: &Self) -> bool {
+        self.color == other.color
+            && self.metrics == other.metrics
+            && self.letter_spacing == other.letter_spacing
+            && self.family == other.family
+            && self.stretch == other.stretch
+            && self.style == other.style
+            && self.weight == other.weight
+            && self.metadata == other.metadata
+            && self.cache_key_flags == other.cache_key_flags
+            && self.font_features == other.font_features
+            && self.font_variations == other.font_variations
+            && self.optical_size == other.optical_size
+    }
+
+    /// Returns `true` if every *shaping-relevant* field is
+    /// [`Override::Inherit`] — i.e. the override only differs from the
+    /// defaults (if at all) in the render-time field `text_decoration`, and
+    /// so has no effect on shaping or layout.
+    ///
+    /// `color` counts as shaping-relevant for now (see [`Self::eq_for_shaping`]).
+    pub fn is_empty_for_shaping(&self) -> bool {
+        self.color.is_inherit()
+            && self.metrics.is_inherit()
+            && self.letter_spacing.is_inherit()
+            && self.family.is_inherit()
+            && self.stretch.is_inherit()
+            && self.style.is_inherit()
+            && self.weight.is_inherit()
+            && self.metadata.is_inherit()
+            && self.cache_key_flags.is_inherit()
+            && self.font_features.is_inherit()
+            && self.font_variations.is_inherit()
+            && self.optical_size.is_inherit()
+    }
+
     /// Returns `true` if every field is [`Override::Inherit`] — i.e.
     /// the override has no effect against any defaults.
     pub fn is_empty(&self) -> bool {
@@ -925,6 +991,38 @@ impl AttrsList {
         }
 
         self.spans.insert(range, over.clone());
+    }
+
+    /// Equality over only the fields that affect shaping and layout.
+    ///
+    /// Two lists are shaping-equal when their defaults are
+    /// [shaping-equal](AttrsOwned::eq_for_shaping) and their spans agree on
+    /// shaping-relevant overrides. Spans whose override differs from the
+    /// defaults *only* in the render-time fields (`color` /
+    /// `text_decoration`) are invisible to shaping and are skipped on both
+    /// sides — so adding, removing, or changing such a span compares equal.
+    ///
+    /// This is the predicate [`crate::BufferLine::set_attrs_list`] uses to
+    /// avoid reshaping on a decoration- or color-only change.
+    pub fn eq_for_shaping(&self, other: &Self) -> bool {
+        if !self.defaults.eq_for_shaping(&other.defaults) {
+            return false;
+        }
+        let shaping_spans = |list: &Self| {
+            list.spans
+                .iter()
+                .filter(|(_, over)| !over.is_empty_for_shaping())
+                .map(|(range, over)| (range.clone(), over.clone()))
+                .collect::<Vec<_>>()
+        };
+        let a = shaping_spans(self);
+        let b = shaping_spans(other);
+        if a.len() != b.len() {
+            return false;
+        }
+        a.iter()
+            .zip(b.iter())
+            .all(|((ra, oa), (rb, ob))| ra == rb && oa.eq_for_shaping(ob))
     }
 
     /// Add an attribute span from a full [`Attrs`] value, computing the
@@ -1146,5 +1244,89 @@ mod tests {
             set_over.merge(&defaults_owned).color_opt,
             Some(Color(0x00_00_ff_ff))
         );
+    }
+
+    fn underline_over() -> AttrsOverride {
+        AttrsOverride {
+            text_decoration: Override::Set(TextDecoration {
+                underline: UnderlineStyle::Single,
+                ..TextDecoration::new()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn decoration_only_span_is_shaping_equal_to_empty() {
+        let base = Attrs::new();
+        let plain = AttrsList::new(&base);
+        let mut underlined = AttrsList::new(&base);
+        underlined.add_span(0..5, &underline_over());
+
+        // Adding a decoration-only span must not change the shaping view.
+        assert!(plain.eq_for_shaping(&underlined));
+        assert!(underlined.eq_for_shaping(&plain));
+        // But the lists are not byte-for-byte equal.
+        assert_ne!(plain, underlined);
+    }
+
+    #[test]
+    fn color_only_span_still_differs_for_shaping() {
+        // Color is still baked at shape time, so it remains shaping-relevant
+        // until live color resolution lands.
+        let base = Attrs::new();
+        let plain = AttrsList::new(&base);
+        let mut colored = AttrsList::new(&base);
+        colored.add_span(
+            0..5,
+            &AttrsOverride {
+                color: Override::Set(Some(Color(0x00_00_ff_ff))),
+                ..Default::default()
+            },
+        );
+        assert!(!plain.eq_for_shaping(&colored));
+    }
+
+    #[test]
+    fn weight_span_differs_for_shaping() {
+        let base = Attrs::new();
+        let plain = AttrsList::new(&base);
+        let mut bold = AttrsList::new(&base);
+        bold.add_span(
+            0..5,
+            &AttrsOverride {
+                weight: Override::Set(Weight::BOLD),
+                ..Default::default()
+            },
+        );
+        assert!(!plain.eq_for_shaping(&bold));
+    }
+
+    #[test]
+    fn font_size_default_differs_for_shaping() {
+        let base = Attrs::new();
+        let small = AttrsList::new(&base);
+        let big = AttrsList::new(&base.metrics(Metrics::new(20.0, 24.0)));
+        assert!(!small.eq_for_shaping(&big));
+    }
+
+    #[test]
+    fn changing_decoration_value_is_shaping_equal() {
+        let base = Attrs::new();
+        let mut single = AttrsList::new(&base);
+        single.add_span(0..5, &underline_over());
+        let mut double = AttrsList::new(&base);
+        double.add_span(
+            0..5,
+            &AttrsOverride {
+                text_decoration: Override::Set(TextDecoration {
+                    underline: UnderlineStyle::Double,
+                    strikethrough: true,
+                    ..TextDecoration::new()
+                }),
+                ..Default::default()
+            },
+        );
+        assert!(single.eq_for_shaping(&double));
     }
 }

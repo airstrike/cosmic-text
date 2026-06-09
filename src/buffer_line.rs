@@ -132,16 +132,23 @@ impl BufferLine {
 
     /// Set attributes list
     ///
-    /// Will reset shape and layout if it differs from current attributes list.
-    /// Returns true if the line was reset
+    /// Will reset shape and layout if the new list differs from the current
+    /// one in any field that affects shaping or layout. A change confined to
+    /// the render-time fields (`color` / `text_decoration`) updates the stored
+    /// list but does **not** reshape — those are resolved at draw, so the next
+    /// draw reflects them. See [`AttrsList::eq_for_shaping`].
+    ///
+    /// Returns true if the line's shaping was reset.
     pub fn set_attrs_list(&mut self, attrs_list: AttrsList) -> bool {
-        if attrs_list != self.attrs_list {
-            self.attrs_list = attrs_list;
-            self.reset_shaping();
-            true
-        } else {
-            false
+        if attrs_list == self.attrs_list {
+            return false;
         }
+        let reshape = !attrs_list.eq_for_shaping(&self.attrs_list);
+        self.attrs_list = attrs_list;
+        if reshape {
+            self.reset_shaping();
+        }
+        reshape
     }
 
     /// Get the Text alignment
