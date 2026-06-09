@@ -1,0 +1,297 @@
+   Compiling cosmic-text v0.19.0 (/Users/andy/projects/cosmic-text)
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+ --> benches/layout.rs:2:17
+  |
+2 | use criterion::{black_box, criterion_group, criterion_main, Criterion};
+  |                 ^^^^^^^^^
+  |
+  = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated function `criterion::black_box`: use `std::hint::black_box()` instead
+ --> benches/layout.rs:6:19
+  |
+6 |         b.iter(|| black_box(ct::FontSystem::new()))
+  |                   ^^^^^^^^^
+
+warning: `cosmic-text` (bench "layout") generated 2 warnings
+    Finished `bench` profile [optimized] target(s) in 37.59s
+     Running benches/layout.rs (target/release/deps/layout-a736a27c82bc88c3)
+Benchmarking Wrap(None, Simple)/small amount of text
+Benchmarking Wrap(None, Simple)/small amount of text: Warming up for 3.0000 s
+Benchmarking Wrap(None, Simple)/small amount of text: Collecting 100 samples in estimated 5.4659 s (40k iterations)
+Benchmarking Wrap(None, Simple)/small amount of text: Analyzing
+Wrap(None, Simple)/small amount of text
+                        time:   [92.782 µs 96.187 µs 99.807 µs]
+Found 5 outliers among 100 measurements (5.00%)
+  4 (4.00%) high mild
+  1 (1.00%) high severe
+Benchmarking Wrap(None, Simple)/large amount of text
+Benchmarking Wrap(None, Simple)/large amount of text: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 14.1s, or reduce sample count to 30.
+Benchmarking Wrap(None, Simple)/large amount of text: Collecting 100 samples in estimated 14.070 s (100 iterations)
+Benchmarking Wrap(None, Simple)/large amount of text: Analyzing
+Wrap(None, Simple)/large amount of text
+                        time:   [199.53 ms 216.24 ms 234.13 ms]
+Found 9 outliers among 100 measurements (9.00%)
+  9 (9.00%) high mild
+Benchmarking Wrap(None, Simple)/arabic text
+Benchmarking Wrap(None, Simple)/arabic text: Warming up for 3.0000 s
+Benchmarking Wrap(None, Simple)/arabic text: Collecting 100 samples in estimated 5.1501 s (800 iterations)
+Benchmarking Wrap(None, Simple)/arabic text: Analyzing
+Wrap(None, Simple)/arabic text
+                        time:   [9.0378 ms 10.266 ms 11.623 ms]
+Found 9 outliers among 100 measurements (9.00%)
+  5 (5.00%) high mild
+  4 (4.00%) high severe
+Benchmarking Wrap(None, Simple)/hebrew text
+Benchmarking Wrap(None, Simple)/hebrew text: Warming up for 3.0000 s
+Benchmarking Wrap(None, Simple)/hebrew text: Collecting 10 samples in estimated 5.0576 s (715 iterations)
+Benchmarking Wrap(None, Simple)/hebrew text: Analyzing
+Wrap(None, Simple)/hebrew text
+                        time:   [6.4159 ms 8.1066 ms 9.2634 ms]
+Benchmarking Wrap(None, Simple)/emoji text
+Benchmarking Wrap(None, Simple)/emoji text: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 5.0s. You may wish to increase target time to 33.6s.
+Benchmarking Wrap(None, Simple)/emoji text: Collecting 10 samples in estimated 33.642 s (10 iterations)
+Benchmarking Wrap(None, Simple)/emoji text: Analyzing
+Wrap(None, Simple)/emoji text
+                        time:   [2.9083 s 3.2492 s 3.6544 s]
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+
+Benchmarking Wrap(None, Advanced)/small amount of text
+Benchmarking Wrap(None, Advanced)/small amount of text: Warming up for 3.0000 s
+Benchmarking Wrap(None, Advanced)/small amount of text: Collecting 100 samples in estimated 5.5507 s (40k iterations)
+Benchmarking Wrap(None, Advanced)/small amount of text: Analyzing
+Wrap(None, Advanced)/small amount of text
+                        time:   [135.55 µs 149.54 µs 164.47 µs]
+Found 5 outliers among 100 measurements (5.00%)
+  4 (4.00%) high mild
+  1 (1.00%) high severe
+Benchmarking Wrap(None, Advanced)/large amount of text
+Benchmarking Wrap(None, Advanced)/large amount of text: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 11.9s, or reduce sample count to 40.
+Benchmarking Wrap(None, Advanced)/large amount of text: Collecting 100 samples in estimated 11.949 s (100 iterations)
+Benchmarking Wrap(None, Advanced)/large amount of text: Analyzing
+Wrap(None, Advanced)/large amount of text
+                        time:   [128.42 ms 139.54 ms 151.61 ms]
+Found 9 outliers among 100 measurements (9.00%)
+  7 (7.00%) high mild
+  2 (2.00%) high severe
+Benchmarking Wrap(None, Advanced)/arabic text
+Benchmarking Wrap(None, Advanced)/arabic text: Warming up for 3.0000 s
+Benchmarking Wrap(None, Advanced)/arabic text: Collecting 100 samples in estimated 5.1497 s (400 iterations)
+Benchmarking Wrap(None, Advanced)/arabic text: Analyzing
+Wrap(None, Advanced)/arabic text
+                        time:   [7.3259 ms 8.0222 ms 8.8042 ms]
+Found 8 outliers among 100 measurements (8.00%)
+  5 (5.00%) high mild
+  3 (3.00%) high severe
+Benchmarking Wrap(None, Advanced)/hebrew text
+Benchmarking Wrap(None, Advanced)/hebrew text: Warming up for 3.0000 s
+Benchmarking Wrap(None, Advanced)/hebrew text: Collecting 10 samples in estimated 5.1256 s (715 iterations)
+Benchmarking Wrap(None, Advanced)/hebrew text: Analyzing
+Wrap(None, Advanced)/hebrew text
+                        time:   [7.2923 ms 7.7864 ms 8.2259 ms]
+Benchmarking Wrap(None, Advanced)/emoji text
+Benchmarking Wrap(None, Advanced)/emoji text: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 5.0s. You may wish to increase target time to 32.9s.
+Benchmarking Wrap(None, Advanced)/emoji text: Collecting 10 samples in estimated 32.933 s (10 iterations)
+Benchmarking Wrap(None, Advanced)/emoji text: Analyzing
+Wrap(None, Advanced)/emoji text
+                        time:   [3.3711 s 3.9906 s 4.7279 s]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+
+Benchmarking Wrap(Glyph, Simple)/small amount of text
+Benchmarking Wrap(Glyph, Simple)/small amount of text: Warming up for 3.0000 s
+Benchmarking Wrap(Glyph, Simple)/small amount of text: Collecting 100 samples in estimated 5.4550 s (35k iterations)
+Benchmarking Wrap(Glyph, Simple)/small amount of text: Analyzing
+Wrap(Glyph, Simple)/small amount of text
+                        time:   [130.94 µs 140.39 µs 150.49 µs]
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+Benchmarking Wrap(Glyph, Simple)/large amount of text
+Benchmarking Wrap(Glyph, Simple)/large amount of text: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 10.2s, or reduce sample count to 40.
+Benchmarking Wrap(Glyph, Simple)/large amount of text: Collecting 100 samples in estimated 10.182 s (100 iterations)
+Benchmarking Wrap(Glyph, Simple)/large amount of text: Analyzing
+Wrap(Glyph, Simple)/large amount of text
+                        time:   [112.28 ms 117.46 ms 123.48 ms]
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+Benchmarking Wrap(Glyph, Simple)/arabic text
+Benchmarking Wrap(Glyph, Simple)/arabic text: Warming up for 3.0000 s
+Benchmarking Wrap(Glyph, Simple)/arabic text: Collecting 100 samples in estimated 5.3037 s (1400 iterations)
+Benchmarking Wrap(Glyph, Simple)/arabic text: Analyzing
+Wrap(Glyph, Simple)/arabic text
+                        time:   [3.9455 ms 4.1501 ms 4.3640 ms]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking Wrap(Glyph, Simple)/hebrew text
+Benchmarking Wrap(Glyph, Simple)/hebrew text: Warming up for 3.0000 s
+Benchmarking Wrap(Glyph, Simple)/hebrew text: Collecting 10 samples in estimated 5.3249 s (825 iterations)
+Benchmarking Wrap(Glyph, Simple)/hebrew text: Analyzing
+Wrap(Glyph, Simple)/hebrew text
+                        time:   [7.0091 ms 7.2988 ms 7.5323 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) low mild
+Benchmarking Wrap(Glyph, Simple)/emoji text
+Benchmarking Wrap(Glyph, Simple)/emoji text: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 5.0s. You may wish to increase target time to 65.5s.
+Benchmarking Wrap(Glyph, Simple)/emoji text: Collecting 10 samples in estimated 65.464 s (10 iterations)
+Benchmarking Wrap(Glyph, Simple)/emoji text: Analyzing
+Wrap(Glyph, Simple)/emoji text
+                        time:   [3.4960 s 3.9019 s 4.2882 s]
+
+Benchmarking Wrap(Glyph, Advanced)/small amount of text
+Benchmarking Wrap(Glyph, Advanced)/small amount of text: Warming up for 3.0000 s
+Benchmarking Wrap(Glyph, Advanced)/small amount of text: Collecting 100 samples in estimated 5.2675 s (40k iterations)
+Benchmarking Wrap(Glyph, Advanced)/small amount of text: Analyzing
+Wrap(Glyph, Advanced)/small amount of text
+                        time:   [107.87 µs 119.19 µs 130.96 µs]
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+Benchmarking Wrap(Glyph, Advanced)/large amount of text
+Benchmarking Wrap(Glyph, Advanced)/large amount of text: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 12.1s, or reduce sample count to 40.
+Benchmarking Wrap(Glyph, Advanced)/large amount of text: Collecting 100 samples in estimated 12.145 s (100 iterations)
+Benchmarking Wrap(Glyph, Advanced)/large amount of text: Analyzing
+Wrap(Glyph, Advanced)/large amount of text
+                        time:   [169.73 ms 187.68 ms 208.08 ms]
+Found 9 outliers among 100 measurements (9.00%)
+  6 (6.00%) high mild
+  3 (3.00%) high severe
+Benchmarking Wrap(Glyph, Advanced)/arabic text
+Benchmarking Wrap(Glyph, Advanced)/arabic text: Warming up for 3.0000 s
+Benchmarking Wrap(Glyph, Advanced)/arabic text: Collecting 100 samples in estimated 5.3532 s (800 iterations)
+Benchmarking Wrap(Glyph, Advanced)/arabic text: Analyzing
+Wrap(Glyph, Advanced)/arabic text
+                        time:   [5.7166 ms 6.0187 ms 6.3445 ms]
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+Benchmarking Wrap(Glyph, Advanced)/hebrew text
+Benchmarking Wrap(Glyph, Advanced)/hebrew text: Warming up for 3.0000 s
+Benchmarking Wrap(Glyph, Advanced)/hebrew text: Collecting 10 samples in estimated 5.2222 s (935 iterations)
+Benchmarking Wrap(Glyph, Advanced)/hebrew text: Analyzing
+Wrap(Glyph, Advanced)/hebrew text
+                        time:   [5.4516 ms 5.8390 ms 6.2881 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking Wrap(Glyph, Advanced)/emoji text
+Benchmarking Wrap(Glyph, Advanced)/emoji text: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 5.0s. You may wish to increase target time to 23.2s.
+Benchmarking Wrap(Glyph, Advanced)/emoji text: Collecting 10 samples in estimated 23.192 s (10 iterations)
+Benchmarking Wrap(Glyph, Advanced)/emoji text: Analyzing
+Wrap(Glyph, Advanced)/emoji text
+                        time:   [2.0141 s 2.2582 s 2.5237 s]
+
+Benchmarking Wrap(Word, Simple)/small amount of text
+Benchmarking Wrap(Word, Simple)/small amount of text: Warming up for 3.0000 s
+Benchmarking Wrap(Word, Simple)/small amount of text: Collecting 100 samples in estimated 5.0338 s (45k iterations)
+Benchmarking Wrap(Word, Simple)/small amount of text: Analyzing
+Wrap(Word, Simple)/small amount of text
+                        time:   [104.54 µs 110.27 µs 116.20 µs]
+Found 4 outliers among 100 measurements (4.00%)
+  4 (4.00%) high mild
+Benchmarking Wrap(Word, Simple)/large amount of text
+Benchmarking Wrap(Word, Simple)/large amount of text: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 10.2s, or reduce sample count to 40.
+Benchmarking Wrap(Word, Simple)/large amount of text: Collecting 100 samples in estimated 10.169 s (100 iterations)
+Benchmarking Wrap(Word, Simple)/large amount of text: Analyzing
+Wrap(Word, Simple)/large amount of text
+                        time:   [106.79 ms 112.17 ms 118.03 ms]
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+Benchmarking Wrap(Word, Simple)/arabic text
+Benchmarking Wrap(Word, Simple)/arabic text: Warming up for 3.0000 s
+Benchmarking Wrap(Word, Simple)/arabic text: Collecting 100 samples in estimated 5.0490 s (1400 iterations)
+Benchmarking Wrap(Word, Simple)/arabic text: Analyzing
+Wrap(Word, Simple)/arabic text
+                        time:   [3.3608 ms 3.5792 ms 3.8498 ms]
+Found 4 outliers among 100 measurements (4.00%)
+  4 (4.00%) high severe
+Benchmarking Wrap(Word, Simple)/hebrew text
+Benchmarking Wrap(Word, Simple)/hebrew text: Warming up for 3.0000 s
+Benchmarking Wrap(Word, Simple)/hebrew text: Collecting 10 samples in estimated 5.1981 s (1210 iterations)
+Benchmarking Wrap(Word, Simple)/hebrew text: Analyzing
+Wrap(Word, Simple)/hebrew text
+                        time:   [3.8551 ms 4.0545 ms 4.2740 ms]
+Benchmarking Wrap(Word, Simple)/emoji text
+Benchmarking Wrap(Word, Simple)/emoji text: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 5.0s. You may wish to increase target time to 20.1s.
+Benchmarking Wrap(Word, Simple)/emoji text: Collecting 10 samples in estimated 20.117 s (10 iterations)
+Benchmarking Wrap(Word, Simple)/emoji text: Analyzing
+Wrap(Word, Simple)/emoji text
+                        time:   [1.9092 s 1.9999 s 2.0953 s]
+
+Benchmarking Wrap(Word, Advanced)/small amount of text
+Benchmarking Wrap(Word, Advanced)/small amount of text: Warming up for 3.0000 s
+Benchmarking Wrap(Word, Advanced)/small amount of text: Collecting 100 samples in estimated 5.1829 s (50k iterations)
+Benchmarking Wrap(Word, Advanced)/small amount of text: Analyzing
+Wrap(Word, Advanced)/small amount of text
+                        time:   [141.18 µs 171.08 µs 201.48 µs]
+Found 11 outliers among 100 measurements (11.00%)
+  6 (6.00%) high mild
+  5 (5.00%) high severe
+Benchmarking Wrap(Word, Advanced)/large amount of text
+Benchmarking Wrap(Word, Advanced)/large amount of text: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 17.0s, or reduce sample count to 20.
+Benchmarking Wrap(Word, Advanced)/large amount of text: Collecting 100 samples in estimated 16.985 s (100 iterations)
+Benchmarking Wrap(Word, Advanced)/large amount of text: Analyzing
+Wrap(Word, Advanced)/large amount of text
+                        time:   [104.27 ms 109.29 ms 114.73 ms]
+Found 5 outliers among 100 measurements (5.00%)
+  5 (5.00%) high mild
+Benchmarking Wrap(Word, Advanced)/arabic text
+Benchmarking Wrap(Word, Advanced)/arabic text: Warming up for 3.0000 s
+Benchmarking Wrap(Word, Advanced)/arabic text: Collecting 100 samples in estimated 5.1580 s (1000 iterations)
+Benchmarking Wrap(Word, Advanced)/arabic text: Analyzing
+Wrap(Word, Advanced)/arabic text
+                        time:   [6.4300 ms 7.3721 ms 8.4347 ms]
+Found 12 outliers among 100 measurements (12.00%)
+  5 (5.00%) high mild
+  7 (7.00%) high severe
+Benchmarking Wrap(Word, Advanced)/hebrew text
+Benchmarking Wrap(Word, Advanced)/hebrew text: Warming up for 3.0000 s
+Benchmarking Wrap(Word, Advanced)/hebrew text: Collecting 10 samples in estimated 5.0451 s (880 iterations)
+Benchmarking Wrap(Word, Advanced)/hebrew text: Analyzing
+Wrap(Word, Advanced)/hebrew text
+                        time:   [5.0154 ms 6.0021 ms 7.0885 ms]
+Benchmarking Wrap(Word, Advanced)/emoji text
+Benchmarking Wrap(Word, Advanced)/emoji text: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 5.0s. You may wish to increase target time to 24.7s.
+Benchmarking Wrap(Word, Advanced)/emoji text: Collecting 10 samples in estimated 24.700 s (10 iterations)
+Benchmarking Wrap(Word, Advanced)/emoji text: Analyzing
+Wrap(Word, Advanced)/emoji text
+                        time:   [2.5271 s 2.9307 s 3.3349 s]
+
+Benchmarking load FontSystem
+Benchmarking load FontSystem: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 22.6s, or reduce sample count to 20.
+Benchmarking load FontSystem: Collecting 100 samples in estimated 22.610 s (100 iterations)
+Benchmarking load FontSystem: Analyzing
+load FontSystem         time:   [198.61 ms 233.13 ms 270.78 ms]
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+

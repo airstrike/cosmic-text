@@ -1,3 +1,8 @@
+// Each test binary that includes this module exercises a different subset of
+// the builder; methods unused by a given binary trip `dead_code` under newer
+// toolchains.
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 
 use cosmic_text::{
