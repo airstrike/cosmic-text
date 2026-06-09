@@ -550,6 +550,37 @@ fn bench_real_pipeline(c: &mut Criterion) {
         let mut fs = FontSystem::new();
         let doc = build_doc(n_lines, spans);
         let (mut buffer, _line_lists, _cache) = setup(&mut fs, &doc);
+        let base = Attrs::new();
+
+        let list_off = AttrsList::new(&base);
+        let over = color_override();
+        let mut list_on = AttrsList::new(&base);
+        for r in &doc.decorations[target] {
+            list_on.add_span(r.clone(), &over);
+        }
+
+        let mut toggle = false;
+        group.bench_function("color_toggle", |b| {
+            b.iter(|| {
+                toggle = !toggle;
+                let list = if toggle {
+                    list_on.clone()
+                } else {
+                    list_off.clone()
+                };
+                let reshaped = buffer.lines[target].set_attrs_list(list);
+                // Under A a color change recolors in place — no reshape.
+                debug_assert!(!reshaped, "color toggle must not reshape under A");
+                buffer.shape_until_scroll(&mut fs, false);
+                black_box(buffer.layout_runs().count());
+            })
+        });
+    }
+
+    {
+        let mut fs = FontSystem::new();
+        let doc = build_doc(n_lines, spans);
+        let (mut buffer, _line_lists, _cache) = setup(&mut fs, &doc);
 
         let small = AttrsList::new(&Attrs::new());
         let big = AttrsList::new(&Attrs::new().metrics(Metrics::new(20.0, 26.0)));

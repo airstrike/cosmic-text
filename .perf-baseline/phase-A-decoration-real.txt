@@ -21,5 +21,20 @@ Per-frame live resolution (model, perframe group, unchanged):
   A_live_opt 400x6 = 73.7 µs vs current_baked 55.3 µs (full-doc; ~1.3x)
   Viewport-bounded; trivial in absolute terms.
 
-Color: still reshapes by design in this increment (color stays baked at
-shape time). See report — live color is the deferred axis.
+Color (now decoupled too — recolor-in-place, no reshape):
+
+real_pipeline/toggle/color_toggle        2.02 µs   <-- A: reshape-free (recolor)
+  vs status-quo color reshape            208.7 µs   (~103x)
+
+A color-only change is excluded from the reshape decision (eq_for_shaping
+ignores color) and instead recolors the cached shape + layout glyphs in place
+from AttrsList::color_at — color is a render-time tint, so the shaped geometry
+stays valid. color_toggle (~2 µs) is a touch above decoration_toggle (~0.8 µs)
+because decoration resolves purely at draw (zero work at toggle) while color
+rewrites each cached glyph's color_opt. font_size_toggle (~207 µs) confirms
+genuine shaping changes still reshape.
+
+Note: color is intentionally NOT stripped from the ShapeRunKey (unlike
+text_decoration) — it is baked into cached ShapeGlyphs, so stripping it would
+serve stale-colored glyphs on a cache hit. It stays in the key for cold-shape
+correctness; the no-reshape win comes from eq_for_shaping + the recolor pass.

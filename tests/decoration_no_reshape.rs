@@ -140,24 +140,42 @@ fn font_decoration_metrics_are_reachable_without_reshaping() {
 }
 
 #[test]
-fn color_change_still_reshapes_for_now() {
-    // Color is still baked at shape time; until live color resolution lands a
-    // color change must reshape so the new color reaches the glyphs.
+fn color_change_does_not_reshape_and_recolors() {
+    // Color is a render-time tint: a color-only change must NOT reshape, and
+    // the cached glyphs are recolored in place so the next draw reflects it.
     let mut fs = FontSystem::new();
     let mut buffer = shaped_buffer(&mut fs);
+    let before = glyph_identities(&buffer);
 
+    let blue = Color::rgb(0x42, 0x85, 0xf4);
     let base = Attrs::new();
     let mut list = AttrsList::new(&base);
     list.add_span(
         6..16,
         &AttrsOverride {
-            color: Override::Set(Some(Color::rgb(0x42, 0x85, 0xf4))),
+            color: Override::Set(Some(blue)),
             ..Default::default()
         },
     );
     let reshaped = buffer.lines[0].set_attrs_list(list);
-    assert!(
-        reshaped,
-        "a color change must still reshape (pre-live-color)"
+    assert!(!reshaped, "a color-only change must not reshape");
+
+    // Shaped geometry is untouched...
+    assert_eq!(
+        before,
+        glyph_identities(&buffer),
+        "shaped glyphs changed on a recolor"
     );
+
+    // ...but every glyph covering 6..16 now carries the new color.
+    let mut saw_blue = false;
+    for run in buffer.layout_runs() {
+        for g in run.glyphs {
+            if g.start >= 6 && g.end <= 16 {
+                assert_eq!(g.color_opt, Some(blue), "glyph in span was not recolored");
+                saw_blue = true;
+            }
+        }
+    }
+    assert!(saw_blue, "expected glyphs inside the recolored range");
 }
