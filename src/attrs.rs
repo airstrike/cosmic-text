@@ -409,6 +409,24 @@ pub struct DecorationMetrics {
     pub thickness: f32,
 }
 
+/// Per-font decoration metrics, independent of any user-chosen decoration.
+///
+/// All values are in EM units (divide-by-`units_per_em`), so a consumer scales
+/// them by the glyph's font size at draw. This is the cacheable, reshape-free
+/// part of decoration geometry: it depends only on the font, so a render-time
+/// resolver can cache it per `font_id` and look it up without reshaping. See
+/// [`crate::Font::decoration_metrics`].
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FontDecorationMetrics {
+    /// Underline offset and thickness from the font.
+    pub underline: DecorationMetrics,
+    /// Strikethrough offset and thickness from the font.
+    pub strikethrough: DecorationMetrics,
+    /// Font ascent in EM units (`ascent / units_per_em`), used for overline
+    /// positioning.
+    pub ascent: f32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlyphDecorationData {
     /// The text decoration configuration from the user

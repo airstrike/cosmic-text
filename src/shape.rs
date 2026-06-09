@@ -739,26 +739,8 @@ impl ShapeGlyph {
 }
 
 fn decoration_metrics(font: &Font) -> (DecorationMetrics, DecorationMetrics, f32) {
-    let metrics = font.metrics();
-    let upem = metrics.units_per_em as f32;
-    if upem == 0.0 {
-        return (
-            DecorationMetrics::default(),
-            DecorationMetrics::default(),
-            0.0,
-        );
-    }
-    (
-        DecorationMetrics {
-            offset: metrics.underline.map_or(-0.125, |d| d.offset / upem),
-            thickness: metrics.underline.map_or(1.0 / 14.0, |d| d.thickness / upem),
-        },
-        DecorationMetrics {
-            offset: metrics.strikeout.map_or(0.3, |d| d.offset / upem),
-            thickness: metrics.strikeout.map_or(1.0 / 14.0, |d| d.thickness / upem),
-        },
-        metrics.ascent / upem,
-    )
+    let m = font.decoration_metrics();
+    (m.underline, m.strikethrough, m.ascent)
 }
 
 /// span index used in `VlRange` to indicate this range is the ellipsis.

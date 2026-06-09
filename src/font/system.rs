@@ -352,6 +352,19 @@ impl FontSystem {
             .clone()
     }
 
+    /// Per-font decoration metrics for `id`, loading the face with default
+    /// weight/optical-size/variations.
+    ///
+    /// Decoration metrics (underline / strikethrough offset + thickness,
+    /// ascent) are a property of the face and do not vary meaningfully with
+    /// weight or variation axes, so a render-time resolver can key its cache on
+    /// `font_id` alone and call this once per font on a miss — no shaping, no
+    /// reshape. See [`crate::Font::decoration_metrics`].
+    pub fn decoration_metrics(&mut self, id: fontdb::ID) -> Option<crate::FontDecorationMetrics> {
+        self.get_font(id, fontdb::Weight::NORMAL, None, &FontVariations::default())
+            .map(|font| font.decoration_metrics())
+    }
+
     /// Get a cached font by its ID, weight, optical size, and precomputed variations hash.
     ///
     /// This is used by the swash rasterizer which only has a [`CacheKey`] (with a hash)

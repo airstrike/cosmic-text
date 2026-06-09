@@ -118,6 +118,28 @@ fn weight_change_reshapes() {
 }
 
 #[test]
+fn font_decoration_metrics_are_reachable_without_reshaping() {
+    // The render-time resolver must be able to obtain per-font decoration
+    // metrics from a glyph's font_id without touching shaping.
+    let mut fs = FontSystem::new();
+    let buffer = shaped_buffer(&mut fs);
+
+    let font_id = buffer
+        .layout_runs()
+        .next()
+        .and_then(|run| run.glyphs.first())
+        .map(|g| g.font_id)
+        .expect("expected at least one shaped glyph");
+
+    let m = fs
+        .decoration_metrics(font_id)
+        .expect("font should be loaded");
+    // Underline has positive thickness; ascent is positive.
+    assert!(m.underline.thickness > 0.0);
+    assert!(m.ascent > 0.0);
+}
+
+#[test]
 fn color_change_still_reshapes_for_now() {
     // Color is still baked at shape time; until live color resolution lands a
     // color change must reshape so the new color reaches the glyphs.
