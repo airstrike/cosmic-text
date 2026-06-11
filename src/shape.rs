@@ -232,8 +232,6 @@ fn shape_fallback(
             font_id: font.id(),
             font_weight: attrs.weight,
             glyph_id: info.glyph_id.try_into().expect("failed to cast glyph ID"),
-            //TODO: color should not be related to shaping
-            color_opt: attrs.color_opt,
             metadata: attrs.metadata,
             cache_key_flags: override_fake_italic(attrs.cache_key_flags, font, &attrs),
             metrics_opt: attrs.metrics_opt.map(Into::into),
@@ -425,14 +423,16 @@ fn shape_run_cached(
 ) {
     use crate::{AttrsOwned, ShapeRunKey};
 
+    // The key holds the shape projection of the attrs, so cached runs are
+    // shared across color and decoration, which are resolved at layout.
     let run_range = start_run..end_run;
     let mut key = ShapeRunKey {
         text: line[run_range.clone()].to_string(),
-        default_attrs: AttrsOwned::new(&attrs_list.defaults()),
+        default_attrs: AttrsOwned::new(&attrs_list.defaults()).shape_attrs(),
         attrs_spans: Vec::new(),
     };
     for (attrs_range, attrs) in attrs_list.spans.overlapping(&run_range) {
-        if attrs == &key.default_attrs {
+        if attrs.eq_shape_attrs(&key.default_attrs) {
             // Skip if attrs matches default attrs
             continue;
         }
@@ -440,7 +440,7 @@ fn shape_run_cached(
         let end = min(attrs_range.end, end_run).saturating_sub(start_run);
         if end > start {
             let range = start..end;
-            key.attrs_spans.push((range, attrs.clone()));
+            key.attrs_spans.push((range, attrs.clone().shape_attrs()));
         }
     }
     if let Some(cache_glyphs) = font_system.shape_run_cache.get(&key) {
@@ -604,7 +604,6 @@ fn shape_skip_glyphs(
                     font_id,
                     font_weight: attrs.weight,
                     glyph_id,
-                    color_opt: attrs.color_opt,
                     metadata: attrs.metadata,
                     cache_key_flags: override_fake_italic(attrs.cache_key_flags, font, &attrs),
                     metrics_opt: attrs.metrics_opt.map(Into::into),
@@ -640,7 +639,6 @@ pub struct ShapeGlyph {
     pub font_id: fontdb::ID,
     pub font_weight: fontdb::Weight,
     pub glyph_id: u16,
-    pub color_opt: Option<Color>,
     pub metadata: usize,
     pub cache_key_flags: CacheKeyFlags,
     pub metrics_opt: Option<Metrics>,
@@ -655,6 +653,7 @@ impl ShapeGlyph {
         y: f32,
         w: f32,
         level: unicode_bidi::Level,
+        color_opt: Option<Color>,
     ) -> LayoutGlyph {
         LayoutGlyph {
             start: self.start,
@@ -670,7 +669,7 @@ impl ShapeGlyph {
             level,
             x_offset: self.x_offset,
             y_offset: self.y_offset,
-            color_opt: self.color_opt,
+            color_opt,
             metadata: self.metadata,
             cache_key_flags: self.cache_key_flags,
         }
@@ -1596,6 +1595,7 @@ impl ShapeLine {
             match_mono_width,
             hinting,
             &[],
+            &AttrsList::new(&Attrs::new()),
         );
         lines
     }
@@ -2296,7 +2296,13 @@ impl ShapeLine {
         match_mono_width: Option<f32>,
         hinting: Hinting,
         span_decorations: &[Vec<(Range<usize>, GlyphDecorationData)>],
+        attrs_list: &AttrsList,
     ) {
+        // Glyphs are emitted mostly in byte order, so the current color run
+        // resolves consecutive glyphs with one lookup; BiDi reordering only
+        // costs extra lookups at direction changes.
+        let mut color_run: Option<(Range<usize>, Option<Color>)> = None;
+
         // For each visual line a list of  (span index,  and range of words in that span)
         // Note that a BiDi visual line could have multiple spans or parts of them
         // let mut vl_range_of_spans = Vec::with_capacity(1);
@@ -2850,13 +2856,13 @@ impl ShapeLine {
 
             let mut decorations: Vec<DecorationSpan> = Vec::new();
 
-            let process_range = |range: Range<usize>,
-                                 x: &mut f32,
-                                 y: &mut f32,
-                                 glyphs: &mut Vec<LayoutGlyph>,
-                                 decorations: &mut Vec<DecorationSpan>,
-                                 max_ascent: &mut f32,
-                                 max_descent: &mut f32| {
+            let mut process_range = |range: Range<usize>,
+                                     x: &mut f32,
+                                     y: &mut f32,
+                                     glyphs: &mut Vec<LayoutGlyph>,
+                                     decorations: &mut Vec<DecorationSpan>,
+                                     max_ascent: &mut f32,
+                                     max_descent: &mut f32| {
                 for r in visual_line.ranges[range.clone()].iter() {
                     let is_ellipsis = r.span == ELLIPSIS_SPAN;
                     let span_words = self.get_span_words(r.span);
@@ -2923,6 +2929,15 @@ impl ShapeLine {
                                 *x -= x_advance;
                             }
                             let y_advance = glyph_font_size * glyph.y_advance;
+                            // Memoize color runs
+                            let color_opt = match &color_run {
+                                Some((range, color)) if range.contains(&glyph.start) => *color,
+                                _ => {
+                                    let (range, color) = attrs_list.color_run(glyph.start);
+                                    color_run = Some((range, color));
+                                    color
+                                }
+                            };
                             let mut layout_glyph = glyph.layout(
                                 glyph_font_size,
                                 glyph.metrics_opt.map(|x| x.line_height),
@@ -2930,6 +2945,7 @@ impl ShapeLine {
                                 *y,
                                 x_advance,
                                 r.level,
+                                color_opt,
                             );
                             // Fix ellipsis glyph indices: point both start and
                             // end to the elision boundary so that hit-detection

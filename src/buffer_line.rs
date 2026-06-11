@@ -124,8 +124,8 @@ impl BufferLine {
     /// Set attributes list
     ///
     /// Resets shape and layout if the new list differs in a field that affects
-    /// shaping. A change confined to `text_decoration` resets layout only.
-    /// Returns true if shaping was reset.
+    /// shaping. A change confined to `text_decoration` or `color_opt` resets
+    /// layout only. Returns true if shaping was reset.
     pub fn set_attrs_list(&mut self, attrs_list: AttrsList) -> bool {
         if attrs_list == self.attrs_list {
             return false;
@@ -284,6 +284,7 @@ impl BufferLine {
                 match_mono_width,
                 hinting,
                 &span_decorations,
+                attrs_list,
             );
             self.layout_opt.set_used(layout);
         }

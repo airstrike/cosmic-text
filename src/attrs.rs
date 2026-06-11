@@ -458,10 +458,12 @@ pub struct AttrsOwned {
 
 impl AttrsOwned {
     /// Equal in every attribute that affects shaping, ignoring
-    /// `text_decoration`, which is resolved at layout.
+    /// `text_decoration` and `color_opt`, which are resolved at layout.
+    ///
+    /// `a.eq_shape_attrs(&b)` holds exactly when
+    /// `a.shape_attrs() == b.shape_attrs()`.
     pub fn eq_shape_attrs(&self, other: &Self) -> bool {
-        self.color_opt == other.color_opt
-            && self.family_owned == other.family_owned
+        self.family_owned == other.family_owned
             && self.stretch == other.stretch
             && self.style == other.style
             && self.weight == other.weight
@@ -470,6 +472,14 @@ impl AttrsOwned {
             && self.metrics_opt == other.metrics_opt
             && self.letter_spacing_opt == other.letter_spacing_opt
             && self.font_features == other.font_features
+    }
+
+    /// The projection onto the fields that affect shaping: `text_decoration`
+    /// and `color_opt` reset to their defaults. See [`Self::eq_shape_attrs`].
+    pub fn shape_attrs(mut self) -> Self {
+        self.color_opt = None;
+        self.text_decoration = TextDecoration::new();
+        self
     }
 
     pub fn new(attrs: &Attrs) -> Self {
@@ -527,8 +537,9 @@ impl AttrsList {
         self.defaults.as_attrs()
     }
 
-    /// True if the two lists differ only in `text_decoration`. Spans that carry
-    /// only decoration (otherwise equal to the defaults) are ignored.
+    /// True if the two lists differ only in `text_decoration` or `color_opt`.
+    /// Spans that carry only those (otherwise equal to the defaults) are
+    /// ignored.
     pub fn eq_shape_attrs(&self, other: &Self) -> bool {
         if !self.defaults.eq_shape_attrs(&other.defaults) {
             return false;
@@ -581,6 +592,21 @@ impl AttrsList {
             .get(&index)
             .map(|v| v.as_attrs())
             .unwrap_or(self.defaults.as_attrs())
+    }
+
+    /// The color at `index` and a contiguous byte range it holds over, so a
+    /// caller walking mostly forward can resolve a run of glyphs with one
+    /// lookup.
+    ///
+    /// For an `index` in the gap between spans, the range starts at `index`
+    /// rather than at the start of the gap, since finding the true start
+    /// would cost a second lookup and a forward walk never revisits it.
+    pub(crate) fn color_run(&self, index: usize) -> (Range<usize>, Option<Color>) {
+        match self.spans.overlapping(index..usize::MAX).next() {
+            Some((range, attrs)) if range.contains(&index) => (range.clone(), attrs.color_opt),
+            Some((range, _)) => (index..range.start, self.defaults.color_opt),
+            None => (index..usize::MAX, self.defaults.color_opt),
+        }
     }
 
     /// Split attributes list at an offset
