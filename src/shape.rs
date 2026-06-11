@@ -421,18 +421,16 @@ fn shape_run_cached(
     end_run: usize,
     span_rtl: bool,
 ) {
-    use crate::{AttrsOwned, ShapeRunKey};
+    use crate::{ShapeAttrs, ShapeRunKey};
 
-    // The key holds the shape projection of the attrs, so cached runs are
-    // shared across color and decoration, which are resolved at layout.
     let run_range = start_run..end_run;
     let mut key = ShapeRunKey {
         text: line[run_range.clone()].to_string(),
-        default_attrs: AttrsOwned::new(&attrs_list.defaults()).shape_attrs(),
+        default_attrs: ShapeAttrs::new(&attrs_list.defaults()),
         attrs_spans: Vec::new(),
     };
     for (attrs_range, attrs) in attrs_list.spans.overlapping(&run_range) {
-        if attrs.eq_shape_attrs(&key.default_attrs) {
+        if attrs.shape == key.default_attrs {
             // Skip if attrs matches default attrs
             continue;
         }
@@ -440,7 +438,7 @@ fn shape_run_cached(
         let end = min(attrs_range.end, end_run).saturating_sub(start_run);
         if end > start {
             let range = start..end;
-            key.attrs_spans.push((range, attrs.clone().shape_attrs()));
+            key.attrs_spans.push((range, attrs.shape.clone()));
         }
     }
     if let Some(cache_glyphs) = font_system.shape_run_cache.get(&key) {

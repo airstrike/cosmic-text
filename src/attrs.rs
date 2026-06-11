@@ -438,11 +438,11 @@ impl<'a> From<&Attrs<'a>> for FontMatchAttrs {
     }
 }
 
-/// An owned version of [`Attrs`]
+/// Attributes that determine shaped output.
+///
+/// Shaped runs are reusable wherever these are equal.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct AttrsOwned {
-    //TODO: should this be an option?
-    pub color_opt: Option<Color>,
+pub struct ShapeAttrs {
     pub family_owned: FamilyOwned,
     pub stretch: Stretch,
     pub style: Style,
@@ -453,38 +453,27 @@ pub struct AttrsOwned {
     /// Letter spacing (tracking) in EM
     pub letter_spacing_opt: Option<LetterSpacing>,
     pub font_features: FontFeatures,
+}
+
+/// Render attributes, which are resolved at layout and do
+/// not involve reshaping.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct RenderAttrs {
+    //TODO: should this be an option?
+    pub color_opt: Option<Color>,
     pub text_decoration: TextDecoration,
 }
 
-impl AttrsOwned {
-    /// Equal in every attribute that affects shaping, ignoring
-    /// `text_decoration` and `color_opt`, which are resolved at layout.
-    ///
-    /// `a.eq_shape_attrs(&b)` holds exactly when
-    /// `a.shape_attrs() == b.shape_attrs()`.
-    pub fn eq_shape_attrs(&self, other: &Self) -> bool {
-        self.family_owned == other.family_owned
-            && self.stretch == other.stretch
-            && self.style == other.style
-            && self.weight == other.weight
-            && self.metadata == other.metadata
-            && self.cache_key_flags == other.cache_key_flags
-            && self.metrics_opt == other.metrics_opt
-            && self.letter_spacing_opt == other.letter_spacing_opt
-            && self.font_features == other.font_features
-    }
+/// An owned version of [`Attrs`]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct AttrsOwned {
+    pub shape: ShapeAttrs,
+    pub render: RenderAttrs,
+}
 
-    /// The projection onto the fields that affect shaping: `text_decoration`
-    /// and `color_opt` reset to their defaults. See [`Self::eq_shape_attrs`].
-    pub fn shape_attrs(mut self) -> Self {
-        self.color_opt = None;
-        self.text_decoration = TextDecoration::new();
-        self
-    }
-
+impl ShapeAttrs {
     pub fn new(attrs: &Attrs) -> Self {
         Self {
-            color_opt: attrs.color_opt,
             family_owned: FamilyOwned::new(attrs.family),
             stretch: attrs.stretch,
             style: attrs.style,
@@ -494,23 +483,40 @@ impl AttrsOwned {
             metrics_opt: attrs.metrics_opt,
             letter_spacing_opt: attrs.letter_spacing_opt,
             font_features: attrs.font_features.clone(),
+        }
+    }
+}
+
+impl RenderAttrs {
+    pub const fn new(attrs: &Attrs) -> Self {
+        Self {
+            color_opt: attrs.color_opt,
             text_decoration: attrs.text_decoration,
+        }
+    }
+}
+
+impl AttrsOwned {
+    pub fn new(attrs: &Attrs) -> Self {
+        Self {
+            shape: ShapeAttrs::new(attrs),
+            render: RenderAttrs::new(attrs),
         }
     }
 
     pub fn as_attrs(&self) -> Attrs<'_> {
         Attrs {
-            color_opt: self.color_opt,
-            family: self.family_owned.as_family(),
-            stretch: self.stretch,
-            style: self.style,
-            weight: self.weight,
-            metadata: self.metadata,
-            cache_key_flags: self.cache_key_flags,
-            metrics_opt: self.metrics_opt,
-            letter_spacing_opt: self.letter_spacing_opt,
-            font_features: self.font_features.clone(),
-            text_decoration: self.text_decoration,
+            color_opt: self.render.color_opt,
+            family: self.shape.family_owned.as_family(),
+            stretch: self.shape.stretch,
+            style: self.shape.style,
+            weight: self.shape.weight,
+            metadata: self.shape.metadata,
+            cache_key_flags: self.shape.cache_key_flags,
+            metrics_opt: self.shape.metrics_opt,
+            letter_spacing_opt: self.shape.letter_spacing_opt,
+            font_features: self.shape.font_features.clone(),
+            text_decoration: self.render.text_decoration,
         }
     }
 }
@@ -537,26 +543,18 @@ impl AttrsList {
         self.defaults.as_attrs()
     }
 
-    /// True if the two lists differ only in `text_decoration` or `color_opt`.
-    /// Spans that carry only those (otherwise equal to the defaults) are
-    /// ignored.
+    /// True if the two lists differ only in [`RenderAttrs`]. Spans that carry
+    /// only render changes (otherwise equal to the defaults) are ignored.
     pub fn eq_shape_attrs(&self, other: &Self) -> bool {
-        if !self.defaults.eq_shape_attrs(&other.defaults) {
-            return false;
-        }
-        let mut a = self
-            .spans_iter()
-            .filter(|(_, attrs)| !attrs.eq_shape_attrs(&self.defaults));
-        let mut b = other
-            .spans_iter()
-            .filter(|(_, attrs)| !attrs.eq_shape_attrs(&other.defaults));
-        loop {
-            match (a.next(), b.next()) {
-                (None, None) => return true,
-                (Some((ra, aa)), Some((rb, ab))) if ra == rb && aa.eq_shape_attrs(ab) => {}
-                _ => return false,
-            }
-        }
+        self.defaults.shape == other.defaults.shape && self.shape_spans().eq(other.shape_spans())
+    }
+
+    /// The spans that differ from the defaults in shape, projected onto
+    /// [`ShapeAttrs`]
+    fn shape_spans(&self) -> impl Iterator<Item = (&Range<usize>, &ShapeAttrs)> + '_ {
+        self.spans_iter()
+            .filter(|(_, attrs)| attrs.shape != self.defaults.shape)
+            .map(|(range, attrs)| (range, &attrs.shape))
     }
 
     /// Get the current attribute spans
@@ -603,9 +601,11 @@ impl AttrsList {
     /// would cost a second lookup and a forward walk never revisits it.
     pub(crate) fn color_run(&self, index: usize) -> (Range<usize>, Option<Color>) {
         match self.spans.overlapping(index..usize::MAX).next() {
-            Some((range, attrs)) if range.contains(&index) => (range.clone(), attrs.color_opt),
-            Some((range, _)) => (index..range.start, self.defaults.color_opt),
-            None => (index..usize::MAX, self.defaults.color_opt),
+            Some((range, attrs)) if range.contains(&index) => {
+                (range.clone(), attrs.render.color_opt)
+            }
+            Some((range, _)) => (index..range.start, self.defaults.render.color_opt),
+            None => (index..usize::MAX, self.defaults.render.color_opt),
         }
     }
 

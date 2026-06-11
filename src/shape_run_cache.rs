@@ -2,14 +2,17 @@
 use alloc::{string::String, vec::Vec};
 use core::ops::Range;
 
-use crate::{AttrsOwned, HashMap, ShapeGlyph};
+use crate::{HashMap, ShapeAttrs, ShapeGlyph};
 
 /// Key for caching shape runs.
+///
+/// Holding [`ShapeAttrs`] keeps the cache shared across attributes that are
+/// resolved at layout, like color and decoration.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ShapeRunKey {
     pub text: String,
-    pub default_attrs: AttrsOwned,
-    pub attrs_spans: Vec<(Range<usize>, AttrsOwned)>,
+    pub default_attrs: ShapeAttrs,
+    pub attrs_spans: Vec<(Range<usize>, ShapeAttrs)>,
 }
 
 /// A helper structure for caching shape runs.
