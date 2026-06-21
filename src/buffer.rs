@@ -531,6 +531,8 @@ impl Buffer {
 
         let mut layout_y = 0.0;
         let mut total_height = {
+            let line = &self.lines[layout_cursor.line];
+            let line_margins = line.margin_top() + line.margin_bottom();
             let layout = self
                 .line_layout(font_system, layout_cursor.line)
                 .expect("shape_until_cursor failed to scroll forwards");
@@ -543,6 +545,7 @@ impl Buffer {
                 + layout[layout_cursor.layout]
                     .line_height_opt
                     .unwrap_or(metrics.line_height)
+                + line_margins
         };
 
         if self.scroll.line > layout_cursor.line
@@ -568,6 +571,8 @@ impl Buffer {
                     for layout_line in layout {
                         total_height += layout_line.line_height_opt.unwrap_or(metrics.line_height);
                     }
+                    total_height +=
+                        self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
                     if total_height > height + self.scroll.vertical {
                         self.scroll.line = line_i;
                         self.scroll.vertical = total_height - height;
@@ -648,6 +653,8 @@ impl Buffer {
                             layout_height +=
                                 layout_line.line_height_opt.unwrap_or(metrics.line_height);
                         }
+                        layout_height +=
+                            self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
                         self.scroll.line = line_i;
                         self.scroll.vertical += layout_height;
                     } else {
