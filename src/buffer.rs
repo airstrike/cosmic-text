@@ -548,6 +548,14 @@ impl Buffer {
                 + line_margins
         };
 
+        // When the cursor sits on the last line, reserve the bottom pad
+        // below it so cursor-follow scrolling mirrors the resting state
+        // (last line `pad.bottom` above the viewport bottom) rather than
+        // pinning the cursor flush to the edge.
+        if layout_cursor.line + 1 == self.lines.len() {
+            total_height += self.vertical_pad.bottom;
+        }
+
         if self.scroll.line > layout_cursor.line
             || (self.scroll.line == layout_cursor.line && self.scroll.vertical > layout_y)
         {
@@ -705,6 +713,11 @@ impl Buffer {
                     self.scroll.vertical -= layout_height;
                 }
             }
+
+            // Bottom padding extends the content the clamp measures, so the
+            // scroll equilibrium leaves `pad.bottom` of space below the last
+            // line instead of resting it flush against the viewport bottom.
+            total_height += self.vertical_pad.bottom;
 
             if total_height < scroll_end && self.scroll.line > 0 {
                 // Need to scroll up to stay inside of buffer
