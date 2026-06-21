@@ -72,6 +72,11 @@ impl LayoutRun<'_> {
     ) -> impl Iterator<Item = (f32, f32)> {
         let line_i = self.line_i;
         let mut results = Vec::new();
+
+        if line_i < cursor_start.line || line_i > cursor_end.line {
+            return results.into_iter();
+        }
+
         let mut range_opt: Option<(f32, f32)> = None;
 
         for glyph in self.glyphs {
