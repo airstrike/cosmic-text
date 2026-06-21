@@ -289,7 +289,6 @@ impl<'a> FontFallbackIter<'a> {
 
         self.font_match_keys
             .iter()
-            .filter(|m_key| m_key.font_weight_diff == 0 || m_key.variable_weight_match)
             .find(|m_key| self.face_contains_family(m_key.id, default_family_name))
     }
 
