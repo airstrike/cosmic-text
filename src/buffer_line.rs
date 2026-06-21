@@ -20,6 +20,7 @@ pub struct BufferLine {
     layout_opt: Cached<Vec<LayoutLine>>,
     shaping: Shaping,
     metadata: Option<usize>,
+    margin_left: f32,
 }
 
 impl BufferLine {
@@ -41,6 +42,7 @@ impl BufferLine {
             layout_opt: Cached::Empty,
             shaping,
             metadata: None,
+            margin_left: 0.0,
         }
     }
 
@@ -62,6 +64,7 @@ impl BufferLine {
         self.layout_opt.set_unused();
         self.shaping = shaping;
         self.metadata = None;
+        self.margin_left = 0.0;
     }
 
     /// Get current text
@@ -186,6 +189,22 @@ impl BufferLine {
         self.reset();
     }
 
+    /// Get the left margin in pixels
+    pub const fn margin_left(&self) -> f32 {
+        self.margin_left
+    }
+
+    /// Set the left margin in pixels. Returns true if the value changed.
+    pub fn set_margin_left(&mut self, margin_left: f32) -> bool {
+        if (margin_left - self.margin_left).abs() > f32::EPSILON {
+            self.margin_left = margin_left;
+            self.reset_layout();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Split off new line at index
     pub fn split_off(&mut self, index: usize) -> Self {
         let text = self.text.split_off(index);
@@ -196,6 +215,7 @@ impl BufferLine {
         // To preserve line endings, it moves to the new line
         self.ending = LineEnding::None;
         new.align = self.align;
+        new.margin_left = self.margin_left;
         new
     }
 
@@ -291,6 +311,7 @@ impl BufferLine {
                 hinting,
                 &span_decorations,
                 attrs_list,
+                self.margin_left,
             );
             self.layout_opt.set_used(layout);
         }
@@ -331,6 +352,7 @@ impl BufferLine {
             layout_opt: Cached::Empty,
             shaping: Shaping::Advanced,
             metadata: None,
+            margin_left: 0.0,
         }
     }
 

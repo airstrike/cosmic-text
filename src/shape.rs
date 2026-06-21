@@ -1669,6 +1669,7 @@ impl ShapeLine {
             hinting,
             &[],
             &AttrsList::new(&Attrs::new()),
+            0.0,
         );
         lines
     }
@@ -2370,7 +2371,10 @@ impl ShapeLine {
         hinting: Hinting,
         span_decorations: &[Vec<(Range<usize>, GlyphDecorationData)>],
         attrs_list: &AttrsList,
+        margin_left: f32,
     ) {
+        // Reduce available width by margin_left for wrapping
+        let width_opt = width_opt.map(|w| (w - margin_left).max(0.0));
         // Glyphs are emitted mostly in byte order, so the current color run
         // resolves consecutive glyphs with one lookup; BiDi reordering only
         // costs extra lookups at direction changes.
@@ -2859,7 +2863,11 @@ impl ShapeLine {
             width
         });
 
-        let start_x = if self.rtl { line_width } else { 0.0 };
+        let start_x = if self.rtl {
+            line_width + margin_left
+        } else {
+            margin_left
+        };
 
         let number_of_visual_lines = visual_lines.len();
         for (index, visual_line) in visual_lines.iter().enumerate() {
@@ -3131,7 +3139,7 @@ impl ShapeLine {
                 } else if self.rtl {
                     start_x - x
                 } else {
-                    x
+                    x - margin_left
                 },
                 max_ascent,
                 max_descent,
