@@ -11,6 +11,8 @@ bitflags::bitflags! {
         const DISABLE_HINTING = 2;
         /// Render as a pixel font
         const PIXEL_FONT = 4;
+        /// Optical sizing is disabled
+        const OPTICAL_SIZING_OFF = 8;
     }
 }
 
@@ -31,6 +33,8 @@ pub struct CacheKey {
     pub font_weight: fontdb::Weight,
     /// [`CacheKeyFlags`]
     pub flags: CacheKeyFlags,
+    /// Optical size bits (`u32::MAX` = no opsz)
+    pub optical_size_bits: u32,
 }
 
 impl CacheKey {
@@ -41,6 +45,7 @@ impl CacheKey {
         pos: (f32, f32),
         weight: fontdb::Weight,
         flags: CacheKeyFlags,
+        optical_size: Option<f32>,
     ) -> (Self, i32, i32) {
         let (x, x_bin) = SubpixelBin::new(pos.0);
         let (y, y_bin) = SubpixelBin::new(pos.1);
@@ -53,6 +58,7 @@ impl CacheKey {
                 y_bin,
                 flags,
                 font_weight: weight,
+                optical_size_bits: optical_size.map_or(u32::MAX, |v| v.to_bits()),
             },
             x,
             y,

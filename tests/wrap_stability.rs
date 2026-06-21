@@ -21,7 +21,14 @@ fn stable_wrap() {
     font_system.db_mut().load_font_data(font);
 
     let mut check_wrap = |text: &_, wrap, align_opt, start_width_opt| {
-        let line = ShapeLine::new(&mut font_system, text, &attrs, Shaping::Advanced, 8);
+        let line = ShapeLine::new(
+            &mut font_system,
+            text,
+            &attrs,
+            Shaping::Advanced,
+            8,
+            font_size,
+        );
 
         let layout_unbounded = line.layout(
             font_size,

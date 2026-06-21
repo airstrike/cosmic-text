@@ -694,7 +694,7 @@ impl Buffer {
         line_i: usize,
     ) -> Option<&ShapeLine> {
         let line = self.lines.get_mut(line_i)?;
-        Some(line.shape(font_system, self.tab_width))
+        Some(line.shape(font_system, self.tab_width, self.metrics.font_size))
     }
 
     /// Lay out the provided line index and return the result

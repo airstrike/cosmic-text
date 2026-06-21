@@ -11,6 +11,83 @@ use crate::{CacheKeyFlags, Metrics};
 
 pub use fontdb::{Family, Stretch, Style, Weight};
 
+/// Optical size setting for variable fonts with an `opsz` axis.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum OpticalSize {
+    /// Automatically set `opsz` to match the font size.
+    Auto,
+    /// Set `opsz` to a specific value, independent of font size.
+    Fixed(f32),
+    /// Disable optical sizing entirely (default).
+    #[default]
+    None,
+}
+
+impl OpticalSize {
+    pub fn resolve(self, font_size: f32) -> Option<f32> {
+        match self {
+            Self::Auto => Some(font_size),
+            Self::Fixed(v) => Some(v),
+            Self::None => None,
+        }
+    }
+
+    pub fn is_none(self) -> bool {
+        matches!(self, Self::None)
+    }
+
+    /// Resolve to `Option<f32>` without knowing the rendered font size.
+    /// `Fixed(v)` resolves to `Some(v)`; `Auto` and `None` both resolve to
+    /// `None`. Use this during font fallback selection where the final
+    /// rendered size is not yet known.
+    pub fn resolve_fixed(self) -> Option<f32> {
+        match self {
+            Self::Fixed(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+impl PartialEq for OpticalSize {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Auto, Self::Auto) | (Self::None, Self::None) => true,
+            (Self::Fixed(a), Self::Fixed(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for OpticalSize {}
+
+impl core::hash::Hash for OpticalSize {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        if let Self::Fixed(v) = self {
+            v.to_bits().hash(state);
+        }
+    }
+}
+
+impl PartialOrd for OpticalSize {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OpticalSize {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        match (self, other) {
+            (Self::Auto, Self::Auto) | (Self::None, Self::None) => core::cmp::Ordering::Equal,
+            (Self::Auto, _) => core::cmp::Ordering::Less,
+            (_, Self::Auto) => core::cmp::Ordering::Greater,
+            (Self::None, _) => core::cmp::Ordering::Greater,
+            (_, Self::None) => core::cmp::Ordering::Less,
+            (Self::Fixed(a), Self::Fixed(b)) => a.to_bits().cmp(&b.to_bits()),
+        }
+    }
+}
+
 /// Text color
 #[derive(Clone, Copy, Debug, PartialOrd, Ord, Eq, Hash, PartialEq)]
 pub struct Color(pub u32);
@@ -297,6 +374,7 @@ pub struct Attrs<'a> {
     pub letter_spacing_opt: Option<LetterSpacing>,
     pub font_features: FontFeatures,
     pub text_decoration: TextDecoration,
+    pub optical_size: OpticalSize,
 }
 
 impl<'a> Attrs<'a> {
@@ -316,6 +394,7 @@ impl<'a> Attrs<'a> {
             letter_spacing_opt: None,
             font_features: FontFeatures::new(),
             text_decoration: TextDecoration::new(),
+            optical_size: OpticalSize::None,
         }
     }
 
@@ -376,6 +455,23 @@ impl<'a> Attrs<'a> {
     /// Set [`FontFeatures`]
     pub fn font_features(mut self, font_features: FontFeatures) -> Self {
         self.font_features = font_features;
+        self
+    }
+
+    /// Enable or disable automatic optical sizing.
+    /// When true, the font's `opsz` axis is set to match the rendered font size.
+    pub fn optical_sizing(mut self, enabled: bool) -> Self {
+        self.optical_size = if enabled {
+            OpticalSize::Auto
+        } else {
+            OpticalSize::None
+        };
+        self
+    }
+
+    /// Set a specific [`OpticalSize`] value.
+    pub fn optical_size(mut self, optical_size: OpticalSize) -> Self {
+        self.optical_size = optical_size;
         self
     }
 
@@ -453,6 +549,7 @@ pub struct ShapeAttrs {
     /// Letter spacing (tracking) in EM
     pub letter_spacing_opt: Option<LetterSpacing>,
     pub font_features: FontFeatures,
+    pub optical_size: OpticalSize,
 }
 
 /// Render attributes, which are resolved at layout and do
@@ -483,6 +580,7 @@ impl ShapeAttrs {
             metrics_opt: attrs.metrics_opt,
             letter_spacing_opt: attrs.letter_spacing_opt,
             font_features: attrs.font_features.clone(),
+            optical_size: attrs.optical_size,
         }
     }
 }
@@ -517,6 +615,7 @@ impl AttrsOwned {
             letter_spacing_opt: self.shape.letter_spacing_opt,
             font_features: self.shape.font_features.clone(),
             text_decoration: self.render.text_decoration,
+            optical_size: self.shape.optical_size,
         }
     }
 }

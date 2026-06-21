@@ -15,31 +15,65 @@ use crate::{CacheKey, CacheKeyFlags, Color, FontSystem, HashMap};
 pub use swash::scale::image::{Content as SwashContent, Image as SwashImage};
 pub use swash::zeno::{Angle, Command, Placement, Transform};
 
+/// Decode the optical size from a [`CacheKey`]. Returns `None` when opsz is
+/// disabled (sentinel value `u32::MAX`).
+fn decode_opsz(cache_key: &CacheKey) -> Option<f32> {
+    if cache_key.optical_size_bits == u32::MAX {
+        None
+    } else {
+        Some(f32::from_bits(cache_key.optical_size_bits))
+    }
+}
+
+/// Build a set of variation coordinates for the swash scaler, combining
+/// the weight axis with an optional optical-size axis.
+fn build_variation_coords(font: &crate::Font, cache_key: &CacheKey) -> Vec<(swash::Tag, f32)> {
+    let variations = font.as_swash().variations();
+    let mut coords = Vec::new();
+
+    if let Some(wght) = variations.find_by_tag(swash::Tag::from_be_bytes(*b"wght")) {
+        coords.push((
+            swash::Tag::from_be_bytes(*b"wght"),
+            f32::from(cache_key.font_weight.0).clamp(wght.min_value(), wght.max_value()),
+        ));
+    }
+
+    if let Some(opsz_val) = decode_opsz(cache_key) {
+        if let Some(opsz_var) = variations.find_by_tag(swash::Tag::from_be_bytes(*b"opsz")) {
+            coords.push((
+                swash::Tag::from_be_bytes(*b"opsz"),
+                opsz_val.clamp(opsz_var.min_value(), opsz_var.max_value()),
+            ));
+        }
+    }
+
+    coords
+}
+
 fn swash_image(
     font_system: &mut FontSystem,
     context: &mut ScaleContext,
     cache_key: CacheKey,
 ) -> Option<SwashImage> {
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight) else {
+    let opsz = decode_opsz(&cache_key);
+    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz) else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
 
-    let variable_width = font
-        .as_swash()
-        .variations()
-        .find_by_tag(swash::Tag::from_be_bytes(*b"wght"));
+    let coords = build_variation_coords(&font, &cache_key);
 
     // Build the scaler
     let mut scaler = context
         .builder(font.as_swash())
         .size(f32::from_bits(cache_key.font_size_bits))
         .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if let Some(variation) = variable_width {
-        scaler = scaler.normalized_coords(font.as_swash().variations().normalized_coords([(
-            swash::Tag::from_be_bytes(*b"wght"),
-            f32::from(cache_key.font_weight.0).clamp(variation.min_value(), variation.max_value()),
-        )]));
+    if !coords.is_empty() {
+        scaler = scaler.normalized_coords(
+            font.as_swash()
+                .variations()
+                .normalized_coords(coords.iter().map(|(t, v)| (*t, *v))),
+        );
     }
     let mut scaler = scaler.build();
 
@@ -86,26 +120,25 @@ fn swash_outline_commands(
 ) -> Option<Box<[swash::zeno::Command]>> {
     use swash::zeno::PathData as _;
 
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight) else {
+    let opsz = decode_opsz(&cache_key);
+    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz) else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
 
-    let variable_width = font
-        .as_swash()
-        .variations()
-        .find_by_tag(swash::Tag::from_be_bytes(*b"wght"));
+    let coords = build_variation_coords(&font, &cache_key);
 
     // Build the scaler
     let mut scaler = context
         .builder(font.as_swash())
         .size(f32::from_bits(cache_key.font_size_bits))
         .hint(!cache_key.flags.contains(CacheKeyFlags::DISABLE_HINTING));
-    if let Some(variation) = variable_width {
-        scaler = scaler.normalized_coords(font.as_swash().variations().normalized_coords([(
-            swash::Tag::from_be_bytes(*b"wght"),
-            f32::from(cache_key.font_weight.0).clamp(variation.min_value(), variation.max_value()),
-        )]));
+    if !coords.is_empty() {
+        scaler = scaler.normalized_coords(
+            font.as_swash()
+                .variations()
+                .normalized_coords(coords.iter().map(|(t, v)| (*t, *v))),
+        );
     }
     let mut scaler = scaler.build();
 

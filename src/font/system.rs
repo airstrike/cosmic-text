@@ -128,6 +128,16 @@ impl FontCachedCodepointSupportInfo {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct FontCacheKey {
+    id: fontdb::ID,
+    weight: fontdb::Weight,
+    /// Bucketed optical size: `None` when opsz is disabled, otherwise the
+    /// rounded integer value. This keeps the cache from growing unboundedly
+    /// while still distinguishing meaningfully different opsz values.
+    opsz_bucket: Option<u16>,
+}
+
 /// Access to the system fonts.
 pub struct FontSystem {
     /// The locale of the system.
@@ -137,7 +147,7 @@ pub struct FontSystem {
     db: fontdb::Database,
 
     /// Cache for loaded fonts from the database.
-    font_cache: HashMap<(fontdb::ID, fontdb::Weight), Option<Arc<Font>>>,
+    font_cache: HashMap<FontCacheKey, Option<Arc<Font>>>,
 
     /// Sorted unique ID's of all Monospace fonts in DB
     monospace_font_ids: Vec<fontdb::ID>,
@@ -298,16 +308,26 @@ impl FontSystem {
         (self.locale, self.db)
     }
 
-    /// Get a font by its ID and weight.
-    pub fn get_font(&mut self, id: fontdb::ID, weight: fontdb::Weight) -> Option<Arc<Font>> {
+    /// Get a font by its ID, weight, and optional optical size.
+    pub fn get_font(
+        &mut self,
+        id: fontdb::ID,
+        weight: fontdb::Weight,
+        opsz: Option<f32>,
+    ) -> Option<Arc<Font>> {
+        let key = FontCacheKey {
+            id,
+            weight,
+            opsz_bucket: opsz.map(|s| s.round().max(0.0) as u16),
+        };
         self.font_cache
-            .entry((id, weight))
+            .entry(key)
             .or_insert_with(|| {
                 #[cfg(feature = "std")]
                 unsafe {
                     self.db.make_shared_face_data(id);
                 }
-                if let Some(font) = Font::new(&self.db, id, weight) {
+                if let Some(font) = Font::new(&self.db, id, weight, opsz) {
                     Some(Arc::new(font))
                 } else {
                     log::warn!(
@@ -343,8 +363,9 @@ impl FontSystem {
         id: fontdb::ID,
         weight: fontdb::Weight,
         word: &str,
+        opsz: Option<f32>,
     ) -> Option<usize> {
-        self.get_font(id, weight).map(|font| {
+        self.get_font(id, weight, opsz).map(|font| {
             let code_points = font.unicode_codepoints();
             let cache = self
                 .font_codepoint_support_info_cache

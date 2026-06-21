@@ -6,7 +6,7 @@ use crate::fallback::FontFallbackIter;
 use crate::{
     math, Align, Attrs, AttrsList, CacheKeyFlags, Color, DecorationMetrics, DecorationSpan,
     Ellipsize, EllipsizeHeightLimit, Family, Font, FontSystem, GlyphDecorationData, Hinting,
-    LayoutGlyph, LayoutLine, Metrics, Wrap,
+    LayoutGlyph, LayoutLine, Metrics, OpticalSize, Wrap,
 };
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec, vec::Vec};
@@ -53,10 +53,19 @@ impl Shaping {
         start_run: usize,
         end_run: usize,
         span_rtl: bool,
+        font_size: f32,
     ) {
         match self {
             #[cfg(feature = "swash")]
-            Self::Basic => shape_skip(font_system, glyphs, line, attrs_list, start_run, end_run),
+            Self::Basic => shape_skip(
+                font_system,
+                glyphs,
+                line,
+                attrs_list,
+                start_run,
+                end_run,
+                font_size,
+            ),
             #[cfg(not(feature = "shape-run-cache"))]
             Self::Advanced => shape_run(
                 glyphs,
@@ -66,6 +75,7 @@ impl Shaping {
                 start_run,
                 end_run,
                 span_rtl,
+                font_size,
             ),
             #[cfg(feature = "shape-run-cache")]
             Self::Advanced => shape_run_cached(
@@ -76,6 +86,7 @@ impl Shaping {
                 start_run,
                 end_run,
                 span_rtl,
+                font_size,
             ),
         }
     }
@@ -235,6 +246,7 @@ fn shape_fallback(
             metadata: attrs.metadata,
             cache_key_flags: override_fake_italic(attrs.cache_key_flags, font, &attrs),
             metrics_opt: attrs.metrics_opt.map(Into::into),
+            optical_size: attrs.optical_size,
         });
     }
 
@@ -277,6 +289,7 @@ fn shape_run(
     start_run: usize,
     end_run: usize,
     span_rtl: bool,
+    font_size: f32,
 ) {
     // Re-use the previous script buffer if possible.
     let mut scripts = {
@@ -299,6 +312,11 @@ fn shape_run(
 
     let attrs = attrs_list.get_span(start_run);
 
+    let effective_font_size = attrs
+        .metrics_opt
+        .map_or(font_size, |m| Metrics::from(m).font_size);
+    let opsz = attrs.optical_size.resolve(effective_font_size);
+
     let fonts = font_system.get_font_matches(&attrs);
 
     let default_families = [&attrs.family];
@@ -309,6 +327,7 @@ fn shape_run(
         &scripts,
         &line[start_run..end_run],
         attrs.weight,
+        opsz,
     );
 
     let font = font_iter.next().expect("no default font found");
@@ -420,6 +439,7 @@ fn shape_run_cached(
     start_run: usize,
     end_run: usize,
     span_rtl: bool,
+    font_size: f32,
 ) {
     use crate::{ShapeAttrs, ShapeRunKey};
 
@@ -461,6 +481,7 @@ fn shape_run_cached(
         start_run,
         end_run,
         span_rtl,
+        font_size,
     );
     glyphs.extend_from_slice(&cache_glyphs);
     for glyph in cache_glyphs.iter_mut() {
@@ -479,8 +500,13 @@ fn shape_skip(
     attrs_list: &AttrsList,
     start_run: usize,
     end_run: usize,
+    font_size: f32,
 ) {
     let attrs = attrs_list.get_span(start_run);
+    let effective_font_size = attrs
+        .metrics_opt
+        .map_or(font_size, |m| Metrics::from(m).font_size);
+    let opsz = attrs.optical_size.resolve(effective_font_size);
     let fonts = font_system.get_font_matches(&attrs);
 
     let default_families = [&attrs.family];
@@ -491,6 +517,7 @@ fn shape_skip(
         &[],
         "",
         attrs.weight,
+        opsz,
     );
 
     let font = font_iter.next().expect("no default font found");
@@ -519,8 +546,15 @@ fn shape_skip(
             .stretch(attrs.stretch);
         let fb_fonts = font_system.get_font_matches(&fb_attrs);
         let fb_families = [&fb_family];
-        let mut fb_iter =
-            FontFallbackIter::new(font_system, &fb_fonts, &fb_families, &[], "", attrs.weight);
+        let mut fb_iter = FontFallbackIter::new(
+            font_system,
+            &fb_fonts,
+            &fb_families,
+            &[],
+            "",
+            attrs.weight,
+            opsz,
+        );
 
         if let Some(fb_font) = fb_iter.next() {
             let fb_swash = fb_font.as_swash();
@@ -605,6 +639,7 @@ fn shape_skip_glyphs(
                     metadata: attrs.metadata,
                     cache_key_flags: override_fake_italic(attrs.cache_key_flags, font, &attrs),
                     metrics_opt: attrs.metrics_opt.map(Into::into),
+                    optical_size: attrs.optical_size,
                 }
             }),
     );
@@ -640,6 +675,7 @@ pub struct ShapeGlyph {
     pub metadata: usize,
     pub cache_key_flags: CacheKeyFlags,
     pub metrics_opt: Option<Metrics>,
+    pub optical_size: OpticalSize,
 }
 
 impl ShapeGlyph {
@@ -670,6 +706,7 @@ impl ShapeGlyph {
             color_opt,
             metadata: self.metadata,
             cache_key_flags: self.cache_key_flags,
+            optical_size: self.optical_size,
         }
     }
 
@@ -711,6 +748,7 @@ fn shape_ellipsis(
     attrs: &Attrs,
     shaping: Shaping,
     span_rtl: bool,
+    font_size: f32,
 ) -> Vec<ShapeGlyph> {
     let attrs_list = AttrsList::new(attrs);
     let level = if span_rtl {
@@ -726,6 +764,7 @@ fn shape_ellipsis(
         level,
         false,
         shaping,
+        font_size,
     );
     let mut glyphs = word.glyphs;
 
@@ -739,6 +778,7 @@ fn shape_ellipsis(
             level,
             false,
             shaping,
+            font_size,
         );
         glyphs = fallback.glyphs;
     }
@@ -773,6 +813,7 @@ impl ShapeWord {
         level: unicode_bidi::Level,
         blank: bool,
         shaping: Shaping,
+        font_size: f32,
     ) -> Self {
         let mut empty = Self::empty();
         empty.build(
@@ -783,6 +824,7 @@ impl ShapeWord {
             level,
             blank,
             shaping,
+            font_size,
         );
         empty
     }
@@ -800,6 +842,7 @@ impl ShapeWord {
         level: unicode_bidi::Level,
         blank: bool,
         shaping: Shaping,
+        font_size: f32,
     ) {
         let word = &line[word_range.clone()];
 
@@ -834,6 +877,7 @@ impl ShapeWord {
                 word_range.start,
                 word_range.end,
                 span_rtl,
+                font_size,
             );
         } else {
             // Complex text path: Full grapheme iteration and attribute processing
@@ -851,6 +895,7 @@ impl ShapeWord {
                         start_run,
                         start_egc,
                         span_rtl,
+                        font_size,
                     );
 
                     start_run = start_egc;
@@ -866,6 +911,7 @@ impl ShapeWord {
                     start_run,
                     word_range.end,
                     span_rtl,
+                    font_size,
                 );
             }
         }
@@ -905,6 +951,7 @@ impl ShapeSpan {
     }
 
     /// Shape a span into a set of words.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         font_system: &mut FontSystem,
         line: &str,
@@ -913,6 +960,7 @@ impl ShapeSpan {
         line_rtl: bool,
         level: unicode_bidi::Level,
         shaping: Shaping,
+        font_size: f32,
     ) -> Self {
         let mut empty = Self::empty();
         empty.build(
@@ -923,6 +971,7 @@ impl ShapeSpan {
             line_rtl,
             level,
             shaping,
+            font_size,
         );
         empty
     }
@@ -930,6 +979,7 @@ impl ShapeSpan {
     /// See [`Self::new`].
     ///
     /// Reuses as much of the pre-existing internal allocations as possible.
+    #[allow(clippy::too_many_arguments)]
     pub fn build(
         &mut self,
         font_system: &mut FontSystem,
@@ -939,6 +989,7 @@ impl ShapeSpan {
         line_rtl: bool,
         level: unicode_bidi::Level,
         shaping: Shaping,
+        font_size: f32,
     ) {
         let span = &line[span_range.start..span_range.end];
 
@@ -976,6 +1027,10 @@ impl ShapeSpan {
                         let fonts = font_system.get_font_matches(&attrs);
                         let default_families = [&attrs.family];
 
+                        let effective_font_size = attrs
+                            .metrics_opt
+                            .map_or(font_size, |m| Metrics::from(m).font_size);
+                        let opsz = attrs.optical_size.resolve(effective_font_size);
                         let mut font_iter = FontFallbackIter::new(
                             font_system,
                             &fonts,
@@ -983,6 +1038,7 @@ impl ShapeSpan {
                             &[],
                             &probe_text,
                             attrs.weight,
+                            opsz,
                         );
 
                         if let Some(font) = font_iter.next() {
@@ -1051,6 +1107,7 @@ impl ShapeSpan {
                     level,
                     false,
                     shaping,
+                    font_size,
                 );
                 words.push(word);
             }
@@ -1067,6 +1124,7 @@ impl ShapeSpan {
                         level,
                         true,
                         shaping,
+                        font_size,
                     );
                     words.push(word);
                 }
@@ -1123,7 +1181,7 @@ impl ShapeSpan {
                 .next()
                 .and_then(|glyph| {
                     font_system
-                        .get_font(glyph.font_id, glyph.font_weight)
+                        .get_font(glyph.font_id, glyph.font_weight, None)
                         .map(|font| decoration_metrics(&font))
                 });
 
@@ -1316,9 +1374,10 @@ impl ShapeLine {
         attrs_list: &AttrsList,
         shaping: Shaping,
         tab_width: u16,
+        font_size: f32,
     ) -> Self {
         let mut empty = Self::empty();
-        empty.build(font_system, line, attrs_list, shaping, tab_width);
+        empty.build(font_system, line, attrs_list, shaping, tab_width, font_size);
         empty
     }
 
@@ -1336,6 +1395,7 @@ impl ShapeLine {
         attrs_list: &AttrsList,
         shaping: Shaping,
         tab_width: u16,
+        font_size: f32,
     ) {
         // Clear stale ellipsis span so it gets recomputed with the current attrs.
         // Without this, reusing a ShapeLine from a previous text (via Cached::Unused)
@@ -1388,6 +1448,7 @@ impl ShapeLine {
                         line_rtl,
                         run_level,
                         shaping,
+                        font_size,
                     );
                     spans.push(span);
                     start = i;
@@ -1403,6 +1464,7 @@ impl ShapeLine {
                 line_rtl,
                 run_level,
                 shaping,
+                font_size,
             );
             spans.push(span);
         }
@@ -1435,7 +1497,7 @@ impl ShapeLine {
                                        // ellipsis even if it's at the end. Which for rich text may look weird if the first
                                        // span has a different color or size than where ellipsizing is happening
             };
-            let mut glyphs = shape_ellipsis(font_system, &attrs, shaping, rtl);
+            let mut glyphs = shape_ellipsis(font_system, &attrs, shaping, rtl, font_size);
             if rtl {
                 glyphs.reverse();
             }

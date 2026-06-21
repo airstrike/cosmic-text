@@ -119,7 +119,12 @@ impl Font {
 }
 
 impl Font {
-    pub fn new(db: &fontdb::Database, id: fontdb::ID, weight: fontdb::Weight) -> Option<Self> {
+    pub fn new(
+        db: &fontdb::Database,
+        id: fontdb::ID,
+        weight: fontdb::Weight,
+        opsz: Option<f32>,
+    ) -> Option<Self> {
         let info = db.face(id)?;
 
         let data = match &info.source {
@@ -138,9 +143,11 @@ impl Font {
         // `ShaperData`, and once to create the persistent `FontRef` tied to the
         // lifetime of the face data.
         let font_ref = FontRef::from_index((*data).as_ref(), info.index).ok()?;
-        let location = font_ref
-            .axes()
-            .location([(Tag::new(b"wght"), weight.0 as f32)]);
+        let mut coords: Vec<(Tag, f32)> = vec![(Tag::new(b"wght"), weight.0 as f32)];
+        if let Some(opsz_val) = opsz {
+            coords.push((Tag::new(b"opsz"), opsz_val));
+        }
+        let location = font_ref.axes().location(coords);
         let metrics = font_ref.metrics(Size::unscaled(), &location);
 
         let monospace_fallback = if cfg!(feature = "monospace_fallback") {
