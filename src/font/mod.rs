@@ -104,6 +104,26 @@ impl Font {
         &self.harfrust.borrow_owner().metrics
     }
 
+    /// Get font-level decoration metrics (underline, strikethrough, ascent) in EM units
+    pub fn decoration_metrics(&self) -> crate::FontDecorationMetrics {
+        let metrics = self.metrics();
+        let upem = metrics.units_per_em as f32;
+        if upem == 0.0 {
+            return crate::FontDecorationMetrics::default();
+        }
+        crate::FontDecorationMetrics {
+            underline: crate::DecorationMetrics {
+                offset: metrics.underline.map_or(-0.125, |d| d.offset / upem),
+                thickness: metrics.underline.map_or(1.0 / 14.0, |d| d.thickness / upem),
+            },
+            strikethrough: crate::DecorationMetrics {
+                offset: metrics.strikeout.map_or(0.3, |d| d.offset / upem),
+                thickness: metrics.strikeout.map_or(1.0 / 14.0, |d| d.thickness / upem),
+            },
+            ascent: metrics.ascent / upem,
+        }
+    }
+
     #[cfg(feature = "peniko")]
     pub fn as_peniko(&self) -> PenikoFont {
         self.data.clone()

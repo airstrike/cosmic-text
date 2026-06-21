@@ -416,6 +416,15 @@ pub struct GlyphDecorationData {
     pub ascent: f32,
 }
 
+/// Font-level decoration metrics (per-font, not per-glyph)
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FontDecorationMetrics {
+    pub underline: DecorationMetrics,
+    pub strikethrough: DecorationMetrics,
+    /// Font ascent in EM units
+    pub ascent: f32,
+}
+
 /// Text attributes
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Attrs<'a> {

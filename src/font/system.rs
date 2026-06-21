@@ -365,6 +365,12 @@ impl FontSystem {
             .unwrap_or_else(|| self.get_font(id, weight, opsz, &FontVariations::new()))
     }
 
+    /// Get font-level decoration metrics for a font face.
+    pub fn decoration_metrics(&mut self, id: fontdb::ID) -> Option<crate::FontDecorationMetrics> {
+        self.get_font(id, fontdb::Weight::NORMAL, None, &FontVariations::new())
+            .map(|font| font.decoration_metrics())
+    }
+
     pub fn is_monospace(&self, id: fontdb::ID) -> bool {
         self.monospace_font_ids.binary_search(&id).is_ok()
     }
