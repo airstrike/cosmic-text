@@ -250,6 +250,14 @@ impl<'b> Iterator for LayoutRunIter<'b> {
         while let Some(line) = self.lines.get(self.line_i) {
             let shape = line.shape_opt()?;
             let layout = line.layout_opt()?;
+
+            // Add margin_top before the first layout line of this buffer line
+            if self.layout_i == 0 {
+                let mt = line.margin_top();
+                self.line_top += mt;
+                self.total_height += mt;
+            }
+
             while let Some(layout_line) = layout.get(self.layout_i) {
                 self.layout_i += 1;
 
@@ -283,6 +291,12 @@ impl<'b> Iterator for LayoutRunIter<'b> {
                     x_offset: layout_line.x_offset,
                 });
             }
+
+            // Add margin_bottom after the last layout line of this buffer line
+            let mb = line.margin_bottom();
+            self.line_top += mb;
+            self.total_height += mb;
+
             self.line_i += 1;
             self.layout_i = 0;
         }
@@ -631,7 +645,10 @@ impl Buffer {
                     break;
                 }
 
-                let mut layout_height = 0.0;
+                let line_margins =
+                    self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
+                let mut layout_height = line_margins;
+                total_height += line_margins;
                 let layout = self
                     .line_layout(font_system, line_i)
                     .expect("shape_until_scroll invalid line");

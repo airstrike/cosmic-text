@@ -21,6 +21,8 @@ pub struct BufferLine {
     shaping: Shaping,
     metadata: Option<usize>,
     margin_left: f32,
+    margin_top: f32,
+    margin_bottom: f32,
 }
 
 impl BufferLine {
@@ -43,6 +45,8 @@ impl BufferLine {
             shaping,
             metadata: None,
             margin_left: 0.0,
+            margin_top: 0.0,
+            margin_bottom: 0.0,
         }
     }
 
@@ -65,6 +69,8 @@ impl BufferLine {
         self.shaping = shaping;
         self.metadata = None;
         self.margin_left = 0.0;
+        self.margin_top = 0.0;
+        self.margin_bottom = 0.0;
     }
 
     /// Get current text
@@ -205,6 +211,38 @@ impl BufferLine {
         }
     }
 
+    /// Get the top margin in pixels
+    pub const fn margin_top(&self) -> f32 {
+        self.margin_top
+    }
+
+    /// Set the top margin in pixels. Returns true if the value changed.
+    pub fn set_margin_top(&mut self, margin_top: f32) -> bool {
+        if (margin_top - self.margin_top).abs() > f32::EPSILON {
+            self.margin_top = margin_top;
+            self.reset_layout();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get the bottom margin in pixels
+    pub const fn margin_bottom(&self) -> f32 {
+        self.margin_bottom
+    }
+
+    /// Set the bottom margin in pixels. Returns true if the value changed.
+    pub fn set_margin_bottom(&mut self, margin_bottom: f32) -> bool {
+        if (margin_bottom - self.margin_bottom).abs() > f32::EPSILON {
+            self.margin_bottom = margin_bottom;
+            self.reset_layout();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Split off new line at index
     pub fn split_off(&mut self, index: usize) -> Self {
         let text = self.text.split_off(index);
@@ -216,6 +254,8 @@ impl BufferLine {
         self.ending = LineEnding::None;
         new.align = self.align;
         new.margin_left = self.margin_left;
+        new.margin_top = self.margin_top;
+        new.margin_bottom = self.margin_bottom;
         new
     }
 
@@ -353,6 +393,8 @@ impl BufferLine {
             shaping: Shaping::Advanced,
             metadata: None,
             margin_left: 0.0,
+            margin_top: 0.0,
+            margin_bottom: 0.0,
         }
     }
 
