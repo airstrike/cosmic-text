@@ -1,4 +1,4 @@
-use crate::{Attrs, Font, FontMatchAttrs, HashMap, ShapeBuffer};
+use crate::{Attrs, Font, FontMatchAttrs, FontVariations, HashMap, ShapeBuffer};
 use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
 use alloc::string::String;
@@ -136,6 +136,8 @@ struct FontCacheKey {
     /// rounded integer value. This keeps the cache from growing unboundedly
     /// while still distinguishing meaningfully different opsz values.
     opsz_bucket: Option<u16>,
+    /// FNV-1a hash of font variation axis settings.
+    variations_hash: u64,
 }
 
 /// Access to the system fonts.
@@ -308,17 +310,19 @@ impl FontSystem {
         (self.locale, self.db)
     }
 
-    /// Get a font by its ID, weight, and optional optical size.
+    /// Get a font by its ID, weight, optional optical size, and variations.
     pub fn get_font(
         &mut self,
         id: fontdb::ID,
         weight: fontdb::Weight,
         opsz: Option<f32>,
+        variations: &FontVariations,
     ) -> Option<Arc<Font>> {
         let key = FontCacheKey {
             id,
             weight,
             opsz_bucket: opsz.map(|s| s.round().max(0.0) as u16),
+            variations_hash: variations.cache_hash(),
         };
         self.font_cache
             .entry(key)
@@ -327,7 +331,7 @@ impl FontSystem {
                 unsafe {
                     self.db.make_shared_face_data(id);
                 }
-                if let Some(font) = Font::new(&self.db, id, weight, opsz) {
+                if let Some(font) = Font::new(&self.db, id, weight, opsz, variations) {
                     Some(Arc::new(font))
                 } else {
                     log::warn!(
@@ -338,6 +342,27 @@ impl FontSystem {
                 }
             })
             .clone()
+    }
+
+    /// Get a font by cache key fields, for use in swash rendering where the
+    /// full `FontVariations` is not available (only the hash is stored).
+    pub fn get_font_by_key(
+        &mut self,
+        id: fontdb::ID,
+        weight: fontdb::Weight,
+        opsz: Option<f32>,
+        variations_hash: u64,
+    ) -> Option<Arc<Font>> {
+        let key = FontCacheKey {
+            id,
+            weight,
+            opsz_bucket: opsz.map(|s| s.round().max(0.0) as u16),
+            variations_hash,
+        };
+        self.font_cache
+            .get(&key)
+            .cloned()
+            .unwrap_or_else(|| self.get_font(id, weight, opsz, &FontVariations::new()))
     }
 
     pub fn is_monospace(&self, id: fontdb::ID) -> bool {
@@ -364,8 +389,9 @@ impl FontSystem {
         weight: fontdb::Weight,
         word: &str,
         opsz: Option<f32>,
+        variations: &FontVariations,
     ) -> Option<usize> {
-        self.get_font(id, weight, opsz).map(|font| {
+        self.get_font(id, weight, opsz, variations).map(|font| {
             let code_points = font.unicode_codepoints();
             let cache = self
                 .font_codepoint_support_info_cache

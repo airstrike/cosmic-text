@@ -269,6 +269,64 @@ impl FontFeatures {
     }
 }
 
+/// A font variation axis setting (e.g. `wdth`, `slnt`, `GRAD`).
+#[derive(Clone, Copy, Debug)]
+pub struct Variation {
+    pub tag: FeatureTag,
+    pub value: f32,
+}
+
+impl PartialEq for Variation {
+    fn eq(&self, other: &Self) -> bool {
+        self.tag == other.tag && self.value.to_bits() == other.value.to_bits()
+    }
+}
+
+impl Eq for Variation {}
+
+impl Hash for Variation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.tag.hash(state);
+        self.value.to_bits().hash(state);
+    }
+}
+
+/// A collection of font variation axis settings.
+///
+/// Note: `wght` and `opsz` are handled via dedicated fields. Use this for all other axes.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct FontVariations {
+    pub variations: Vec<Variation>,
+}
+
+impl FontVariations {
+    pub const fn new() -> Self {
+        Self {
+            variations: Vec::new(),
+        }
+    }
+
+    pub fn set(&mut self, tag: FeatureTag, value: f32) -> &mut Self {
+        self.variations.push(Variation { tag, value });
+        self
+    }
+
+    /// Deterministic hash for cache keys (FNV-1a).
+    pub fn cache_hash(&self) -> u64 {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for v in &self.variations {
+            h ^= v.tag.as_bytes()[0] as u64
+                | (v.tag.as_bytes()[1] as u64) << 8
+                | (v.tag.as_bytes()[2] as u64) << 16
+                | (v.tag.as_bytes()[3] as u64) << 24;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+            h ^= v.value.to_bits() as u64;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+        h
+    }
+}
+
 /// A wrapper for letter spacing to get around that f32 doesn't implement Eq and Hash
 #[derive(Clone, Copy, Debug)]
 pub struct LetterSpacing(pub f32);
@@ -373,6 +431,7 @@ pub struct Attrs<'a> {
     /// Letter spacing (tracking) in EM
     pub letter_spacing_opt: Option<LetterSpacing>,
     pub font_features: FontFeatures,
+    pub font_variations: FontVariations,
     pub text_decoration: TextDecoration,
     pub optical_size: OpticalSize,
 }
@@ -393,6 +452,7 @@ impl<'a> Attrs<'a> {
             metrics_opt: None,
             letter_spacing_opt: None,
             font_features: FontFeatures::new(),
+            font_variations: FontVariations::new(),
             text_decoration: TextDecoration::new(),
             optical_size: OpticalSize::None,
         }
@@ -455,6 +515,12 @@ impl<'a> Attrs<'a> {
     /// Set [`FontFeatures`]
     pub fn font_features(mut self, font_features: FontFeatures) -> Self {
         self.font_features = font_features;
+        self
+    }
+
+    /// Set [`FontVariations`]
+    pub fn font_variations(mut self, font_variations: FontVariations) -> Self {
+        self.font_variations = font_variations;
         self
     }
 
@@ -549,6 +615,7 @@ pub struct ShapeAttrs {
     /// Letter spacing (tracking) in EM
     pub letter_spacing_opt: Option<LetterSpacing>,
     pub font_features: FontFeatures,
+    pub font_variations: FontVariations,
     pub optical_size: OpticalSize,
 }
 
@@ -580,6 +647,7 @@ impl ShapeAttrs {
             metrics_opt: attrs.metrics_opt,
             letter_spacing_opt: attrs.letter_spacing_opt,
             font_features: attrs.font_features.clone(),
+            font_variations: attrs.font_variations.clone(),
             optical_size: attrs.optical_size,
         }
     }
@@ -614,6 +682,7 @@ impl AttrsOwned {
             metrics_opt: self.shape.metrics_opt,
             letter_spacing_opt: self.shape.letter_spacing_opt,
             font_features: self.shape.font_features.clone(),
+            font_variations: self.shape.font_variations.clone(),
             text_decoration: self.render.text_decoration,
             optical_size: self.shape.optical_size,
         }

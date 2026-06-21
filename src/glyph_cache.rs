@@ -35,9 +35,12 @@ pub struct CacheKey {
     pub flags: CacheKeyFlags,
     /// Optical size bits (`u32::MAX` = no opsz)
     pub optical_size_bits: u32,
+    /// FNV-1a hash of font variation axis settings
+    pub variations_hash: u64,
 }
 
 impl CacheKey {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         font_id: fontdb::ID,
         glyph_id: u16,
@@ -46,6 +49,7 @@ impl CacheKey {
         weight: fontdb::Weight,
         flags: CacheKeyFlags,
         optical_size: Option<f32>,
+        variations_hash: u64,
     ) -> (Self, i32, i32) {
         let (x, x_bin) = SubpixelBin::new(pos.0);
         let (y, y_bin) = SubpixelBin::new(pos.1);
@@ -59,6 +63,7 @@ impl CacheKey {
                 flags,
                 font_weight: weight,
                 optical_size_bits: optical_size.map_or(u32::MAX, |v| v.to_bits()),
+                variations_hash,
             },
             x,
             y,

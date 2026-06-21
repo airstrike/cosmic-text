@@ -16,6 +16,8 @@ use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use fontdb::Style;
+
+use crate::FontVariations;
 use self_cell::self_cell;
 
 pub mod fallback;
@@ -124,6 +126,7 @@ impl Font {
         id: fontdb::ID,
         weight: fontdb::Weight,
         opsz: Option<f32>,
+        variations: &FontVariations,
     ) -> Option<Self> {
         let info = db.face(id)?;
 
@@ -143,11 +146,17 @@ impl Font {
         // `ShaperData`, and once to create the persistent `FontRef` tied to the
         // lifetime of the face data.
         let font_ref = FontRef::from_index((*data).as_ref(), info.index).ok()?;
-        let mut coords: Vec<(Tag, f32)> = vec![(Tag::new(b"wght"), weight.0 as f32)];
-        if let Some(opsz_val) = opsz {
-            coords.push((Tag::new(b"opsz"), opsz_val));
-        }
-        let location = font_ref.axes().location(coords);
+        let location = {
+            let mut axes: Vec<(Tag, f32)> = Vec::with_capacity(2 + variations.variations.len());
+            axes.push((Tag::new(b"wght"), weight.0 as f32));
+            if let Some(opsz_val) = opsz {
+                axes.push((Tag::new(b"opsz"), opsz_val));
+            }
+            for v in &variations.variations {
+                axes.push((Tag::new(v.tag.as_bytes()), v.value));
+            }
+            font_ref.axes().location(axes)
+        };
         let metrics = font_ref.metrics(Size::unscaled(), &location);
 
         let monospace_fallback = if cfg!(feature = "monospace_fallback") {

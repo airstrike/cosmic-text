@@ -56,7 +56,12 @@ fn swash_image(
     cache_key: CacheKey,
 ) -> Option<SwashImage> {
     let opsz = decode_opsz(&cache_key);
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz) else {
+    let Some(font) = font_system.get_font_by_key(
+        cache_key.font_id,
+        cache_key.font_weight,
+        opsz,
+        cache_key.variations_hash,
+    ) else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
@@ -121,7 +126,12 @@ fn swash_outline_commands(
     use swash::zeno::PathData as _;
 
     let opsz = decode_opsz(&cache_key);
-    let Some(font) = font_system.get_font(cache_key.font_id, cache_key.font_weight, opsz) else {
+    let Some(font) = font_system.get_font_by_key(
+        cache_key.font_id,
+        cache_key.font_weight,
+        opsz,
+        cache_key.variations_hash,
+    ) else {
         log::warn!("did not find font {:?}", cache_key.font_id);
         return None;
     };
@@ -295,8 +305,8 @@ mod test {
         .map(std::fs::read) else {
             return;
         };
-        let regular = FontRef::from_index(&sfns, 0).unwrap();
-        let italic = FontRef::from_index(&sfns_italic, 0).unwrap();
+        let regular = FontRef::from_index(&sfns, 0).expect("regular font");
+        let italic = FontRef::from_index(&sfns_italic, 0).expect("italic font");
         let wght = Tag::from_be_bytes(*b"wght");
 
         let render = |ctx: &mut ScaleContext, font: FontRef, weight: f32, use_normalized| {
