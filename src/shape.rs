@@ -2948,6 +2948,7 @@ impl ShapeLine {
                     // emitted in byte order, giving amortized O(1) lookup.
                     let mut deco_cursor: usize = 0;
                     // If ending_glyph is not 0 we need to include glyphs from the ending_word
+                    #[allow(clippy::needless_range_loop)]
                     for i in r.start.word..r.end.word + usize::from(r.end.glyph != 0) {
                         let word = &span_words[i];
                         let included_glyphs = match (i == r.start.word, i == r.end.word) {
