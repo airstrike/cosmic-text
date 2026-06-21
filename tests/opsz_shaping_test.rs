@@ -12,7 +12,8 @@ fn opsz_affects_shaping_advance_widths() {
     let attrs = AttrsList::new(
         &Attrs::new()
             .family(Family::Name("Inter Variable"))
-            .weight(Weight::BOLD),
+            .weight(Weight::BOLD)
+            .optical_sizing(true),
     );
 
     let text = "The Inter typeface family";
