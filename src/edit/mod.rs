@@ -288,6 +288,12 @@ pub trait Edit<'buffer> {
     /// Enable or disable automatic indentation
     fn set_auto_indent(&mut self, auto_indent: bool);
 
+    /// Whether auto-scroll is enabled
+    fn scrollable(&self) -> bool;
+
+    /// Enable or disable auto-scroll
+    fn set_scrollable(&mut self, scrollable: bool);
+
     /// Get the current tab width
     fn tab_width(&self) -> u16;
 
