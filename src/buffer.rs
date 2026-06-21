@@ -219,6 +219,8 @@ pub struct LayoutRunIter<'b> {
     layout_i: usize,
     total_height: f32,
     line_top: f32,
+    pad_top: f32,
+    pad_applied: bool,
 }
 
 impl<'b> LayoutRunIter<'b> {
@@ -229,6 +231,7 @@ impl<'b> LayoutRunIter<'b> {
             buffer.metrics.line_height,
             buffer.scroll.vertical,
             buffer.scroll.line,
+            buffer.vertical_pad.top,
         )
     }
 
@@ -238,6 +241,7 @@ impl<'b> LayoutRunIter<'b> {
         line_height: f32,
         scroll: f32,
         start: usize,
+        pad_top: f32,
     ) -> Self {
         Self {
             lines,
@@ -248,6 +252,8 @@ impl<'b> LayoutRunIter<'b> {
             layout_i: 0,
             total_height: 0.0,
             line_top: 0.0,
+            pad_top,
+            pad_applied: false,
         }
     }
 }
@@ -259,6 +265,13 @@ impl<'b> Iterator for LayoutRunIter<'b> {
         while let Some(line) = self.lines.get(self.line_i) {
             let shape = line.shape_opt()?;
             let layout = line.layout_opt()?;
+
+            // Add vertical padding before the very first run
+            if !self.pad_applied {
+                self.line_top += self.pad_top;
+                self.total_height += self.pad_top;
+                self.pad_applied = true;
+            }
 
             // Add margin_top before the first layout line of this buffer line
             if self.layout_i == 0 {
@@ -357,6 +370,13 @@ impl fmt::Display for Metrics {
     }
 }
 
+/// Vertical padding inside the scroll extent
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct VerticalPad {
+    pub top: f32,
+    pub bottom: f32,
+}
+
 /// A buffer of text that is shaped and laid out
 #[derive(Debug)]
 pub struct Buffer {
@@ -375,6 +395,7 @@ pub struct Buffer {
     hinting: Hinting,
     /// Dirty flags tracking which properties changed since last layout
     dirty: DirtyFlags,
+    vertical_pad: VerticalPad,
 }
 
 impl Clone for Buffer {
@@ -392,6 +413,7 @@ impl Clone for Buffer {
             tab_width: self.tab_width,
             hinting: self.hinting,
             dirty: self.dirty,
+            vertical_pad: self.vertical_pad,
         }
     }
 }
@@ -423,6 +445,7 @@ impl Buffer {
             tab_width: 8,
             hinting: Hinting::default(),
             dirty: DirtyFlags::empty(),
+            vertical_pad: VerticalPad::default(),
         }
     }
 
@@ -781,6 +804,20 @@ impl Buffer {
         if hinting != self.hinting {
             self.hinting = hinting;
             self.dirty |= DirtyFlags::RELAYOUT;
+            self.redraw = true;
+        }
+    }
+
+    /// Get the current [`VerticalPad`]
+    pub const fn vertical_pad(&self) -> VerticalPad {
+        self.vertical_pad
+    }
+
+    /// Set the current [`VerticalPad`].
+    pub fn set_vertical_pad(&mut self, vertical_pad: VerticalPad) {
+        if vertical_pad != self.vertical_pad {
+            self.vertical_pad = vertical_pad;
+            self.dirty |= DirtyFlags::SCROLL;
             self.redraw = true;
         }
     }
