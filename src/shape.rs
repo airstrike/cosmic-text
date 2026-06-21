@@ -2900,6 +2900,8 @@ impl ShapeLine {
                 x += alignment_correction;
             }
 
+            let x_offset = x;
+
             if hinting == Hinting::Enabled {
                 x = x.round();
             }
@@ -3146,11 +3148,17 @@ impl ShapeLine {
                 line_height_opt,
                 glyphs,
                 decorations,
+                x_offset,
             });
         }
 
         // This is used to create a visual line for empty lines (e.g. lines with only a <CR>)
         if layout_lines.is_empty() {
+            let empty_x = if self.rtl {
+                line_width + margin_left
+            } else {
+                margin_left
+            };
             layout_lines.push(LayoutLine {
                 w: 0.0,
                 max_ascent: 0.0,
@@ -3158,6 +3166,7 @@ impl ShapeLine {
                 line_height_opt: self.metrics_opt.map(|x| x.line_height),
                 glyphs: Vec::default(),
                 decorations: Vec::new(),
+                x_offset: empty_x,
             });
         }
 

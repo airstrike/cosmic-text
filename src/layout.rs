@@ -152,6 +152,8 @@ pub struct LayoutLine {
     pub glyphs: Vec<LayoutGlyph>,
     /// Text decoration spans covering ranges of glyphs
     pub decorations: Vec<DecorationSpan>,
+    /// X offset of the line content (includes margin and alignment)
+    pub x_offset: f32,
 }
 
 /// Wrapping mode
