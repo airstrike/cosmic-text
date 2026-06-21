@@ -54,6 +54,10 @@ pub struct LayoutRun<'a> {
     pub line_w: f32,
     /// X offset of the line content
     pub x_offset: f32,
+    /// Maximum ascent of glyphs in this run
+    pub max_ascent: f32,
+    /// Maximum descent of glyphs in this run
+    pub max_descent: f32,
 }
 
 impl LayoutRun<'_> {
@@ -294,6 +298,8 @@ impl<'b> Iterator for LayoutRunIter<'b> {
                     line_height,
                     line_w: layout_line.w,
                     x_offset: layout_line.x_offset,
+                    max_ascent: layout_line.max_ascent,
+                    max_descent: layout_line.max_descent,
                 });
             }
 
