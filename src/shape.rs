@@ -6,7 +6,7 @@ use crate::fallback::FontFallbackIter;
 use crate::{
     math, Align, Attrs, AttrsList, CacheKeyFlags, Color, DecorationMetrics, DecorationSpan,
     Ellipsize, EllipsizeHeightLimit, Family, Font, FontSystem, FontVariations, GlyphDecorationData,
-    Hinting, LayoutGlyph, LayoutLine, Metrics, OpticalSize, Wrap,
+    Hinting, LayoutGlyph, LayoutLine, Metrics, OpticalSize, SpanPadding, Wrap,
 };
 #[cfg(not(feature = "std"))]
 use alloc::{format, vec, vec::Vec};
@@ -714,6 +714,8 @@ impl ShapeGlyph {
             cache_key_flags: self.cache_key_flags,
             optical_size: self.optical_size,
             font_variations: self.font_variations.clone(),
+            padding_start: 0.0,
+            padding_end: 0.0,
         }
     }
 
@@ -2453,6 +2455,12 @@ impl ShapeLine {
                 width_opt,
                 ellipsize,
             ) {
+                // Track padding-run transitions across spans and line wraps.
+                // Reset to 0..0 on line wrap so the first word on the new line
+                // re-enters the padding span (clone semantics).
+                let mut padding_range: Range<usize> = 0..0;
+                let mut active_padding = SpanPadding::ZERO;
+
                 'outer: for (span_index, span) in self.spans.iter().enumerate() {
                     let mut word_range_width = 0.;
                     let mut width_before_last_blank = 0.;
@@ -2464,22 +2472,43 @@ impl ShapeLine {
                         let mut fitting_start = WordGlyphPos::new(span.words.len(), 0);
                         for (i, word) in span.words.iter().enumerate().rev() {
                             let word_width = word.width(font_size);
+                            // Padding transition: extra width when crossing
+                            // attrs-span boundaries with different padding.
+                            let pad_extra =
+                                if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                                    let (new_range, new_pad) = attrs_list.padding_run(first_byte);
+                                    if new_range != padding_range {
+                                        active_padding.end() + new_pad.start()
+                                    } else {
+                                        0.0
+                                    }
+                                } else {
+                                    0.0
+                                };
                             // Addition in the same order used to compute the final width, so that
                             // relayouts with that width as the `line_width` will produce the same
                             // wrapping results.
-                            if current_visual_line.w + (word_range_width + word_width)
+                            if current_visual_line.w + (word_range_width + pad_extra + word_width)
                             <= width_opt.unwrap_or(f32::INFINITY)
                             // Include one blank word over the width limit since it won't be
                             // counted in the final width
                             || (word.blank
-                                && (current_visual_line.w + word_range_width) <= width_opt.unwrap_or(f32::INFINITY))
+                                && (current_visual_line.w + word_range_width + pad_extra) <= width_opt.unwrap_or(f32::INFINITY))
                             {
                                 // fits
                                 if word.blank {
                                     number_of_blanks += 1;
                                     width_before_last_blank = word_range_width;
                                 }
-                                word_range_width += word_width;
+                                word_range_width += pad_extra + word_width;
+                                // Update padding state after fit
+                                if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                                    let (new_range, new_pad) = attrs_list.padding_run(first_byte);
+                                    if new_range != padding_range {
+                                        padding_range = new_range;
+                                        active_padding = new_pad;
+                                    }
+                                }
                             } else if wrap == Wrap::Glyph
                             // Make sure that the word is able to fit on it's own line, if not, fall back to Glyph wrapping.
                             || (wrap == Wrap::WordOrGlyph && word_width > width_opt.unwrap_or(f32::INFINITY))
@@ -2497,6 +2526,7 @@ impl ShapeLine {
                                         word_range_width,
                                         number_of_blanks,
                                     );
+                                    current_visual_line.w += active_padding.end();
 
                                     visual_lines.push(current_visual_line);
                                     current_visual_line =
@@ -2504,6 +2534,8 @@ impl ShapeLine {
 
                                     number_of_blanks = 0;
                                     word_range_width = 0.;
+                                    padding_range = 0..0;
+                                    active_padding = SpanPadding::ZERO;
 
                                     fitting_start = WordGlyphPos::new(i, 0);
                                     total_line_count += 1;
@@ -2526,10 +2558,28 @@ impl ShapeLine {
 
                                 for (glyph_i, glyph) in word.glyphs.iter().enumerate().rev() {
                                     let glyph_width = glyph.width(font_size);
-                                    if current_visual_line.w + (word_range_width + glyph_width)
+                                    // Padding transition per glyph (deferred state update)
+                                    let (glyph_pad_extra, glyph_new_pad_range, glyph_new_pad) = {
+                                        let (new_range, new_pad) =
+                                            attrs_list.padding_run(glyph.start);
+                                        if new_range != padding_range {
+                                            let extra = active_padding.end() + new_pad.start();
+                                            (extra, Some(new_range), Some(new_pad))
+                                        } else {
+                                            (0.0, None, None)
+                                        }
+                                    };
+                                    if current_visual_line.w
+                                        + (word_range_width + glyph_pad_extra + glyph_width)
                                         <= width_opt.unwrap_or(f32::INFINITY)
                                     {
-                                        word_range_width += glyph_width;
+                                        word_range_width += glyph_pad_extra + glyph_width;
+                                        if let (Some(nr), Some(np)) =
+                                            (glyph_new_pad_range, glyph_new_pad)
+                                        {
+                                            padding_range = nr;
+                                            active_padding = np;
+                                        }
                                     } else {
                                         self.add_to_visual_line(
                                             &mut current_visual_line,
@@ -2539,12 +2589,25 @@ impl ShapeLine {
                                             word_range_width,
                                             number_of_blanks,
                                         );
+                                        current_visual_line.w += active_padding.end();
                                         visual_lines.push(current_visual_line);
                                         current_visual_line =
                                             cached_visual_lines.pop().unwrap_or_default();
 
                                         number_of_blanks = 0;
+                                        padding_range = 0..0;
+                                        active_padding = SpanPadding::ZERO;
+                                        // Re-enter padding for the glyph starting the new line
                                         word_range_width = glyph_width;
+                                        {
+                                            let (new_range, new_pad) =
+                                                attrs_list.padding_run(glyph.start);
+                                            if new_range != padding_range {
+                                                word_range_width += new_pad.start();
+                                                padding_range = new_range;
+                                                active_padding = new_pad;
+                                            }
+                                        }
                                         fitting_start = WordGlyphPos::new(i, glyph_i + 1);
                                         total_line_count += 1;
                                         total_line_height += line_height;
@@ -2601,10 +2664,13 @@ impl ShapeLine {
                                 // This fixes a bug that a long first word at the boundary of
                                 // was overflowing
                                 if !current_visual_line.ranges.is_empty() {
+                                    current_visual_line.w += active_padding.end();
                                     visual_lines.push(current_visual_line);
                                     current_visual_line =
                                         cached_visual_lines.pop().unwrap_or_default();
                                     number_of_blanks = 0;
+                                    padding_range = 0..0;
+                                    active_padding = SpanPadding::ZERO;
                                     total_line_count += 1;
                                     total_line_height += line_height;
 
@@ -2633,6 +2699,16 @@ impl ShapeLine {
                                     fitting_start = WordGlyphPos::new(i, 0);
                                 } else {
                                     word_range_width = word_width;
+                                    // Re-enter padding for the word starting the new line
+                                    if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                                        let (new_range, new_pad) =
+                                            attrs_list.padding_run(first_byte);
+                                        if new_range != padding_range {
+                                            word_range_width += new_pad.start();
+                                            padding_range = new_range;
+                                            active_padding = new_pad;
+                                        }
+                                    }
                                     fitting_start = WordGlyphPos::new(i + 1, 0);
                                 }
                             }
@@ -2650,19 +2726,40 @@ impl ShapeLine {
                         let mut fitting_start = WordGlyphPos::ZERO;
                         for (i, word) in span.words.iter().enumerate() {
                             let word_width = word.width(font_size);
-                            if current_visual_line.w + (word_range_width + word_width)
+                            // Padding transition: extra width when crossing
+                            // attrs-span boundaries with different padding.
+                            let pad_extra =
+                                if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                                    let (new_range, new_pad) = attrs_list.padding_run(first_byte);
+                                    if new_range != padding_range {
+                                        active_padding.end() + new_pad.start()
+                                    } else {
+                                        0.0
+                                    }
+                                } else {
+                                    0.0
+                                };
+                            if current_visual_line.w + (word_range_width + pad_extra + word_width)
                             <= width_opt.unwrap_or(f32::INFINITY)
                             // Include one blank word over the width limit since it won't be
                             // counted in the final width.
                             || (word.blank
-                                && (current_visual_line.w + word_range_width) <= width_opt.unwrap_or(f32::INFINITY))
+                                && (current_visual_line.w + word_range_width + pad_extra) <= width_opt.unwrap_or(f32::INFINITY))
                             {
                                 // fits
                                 if word.blank {
                                     number_of_blanks += 1;
                                     width_before_last_blank = word_range_width;
                                 }
-                                word_range_width += word_width;
+                                word_range_width += pad_extra + word_width;
+                                // Update padding state after fit
+                                if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                                    let (new_range, new_pad) = attrs_list.padding_run(first_byte);
+                                    if new_range != padding_range {
+                                        padding_range = new_range;
+                                        active_padding = new_pad;
+                                    }
+                                }
                             } else if wrap == Wrap::Glyph
                             // Make sure that the word is able to fit on it's own line, if not, fall back to Glyph wrapping.
                             || (wrap == Wrap::WordOrGlyph && word_width > width_opt.unwrap_or(f32::INFINITY))
@@ -2680,6 +2777,7 @@ impl ShapeLine {
                                         word_range_width,
                                         number_of_blanks,
                                     );
+                                    current_visual_line.w += active_padding.end();
 
                                     visual_lines.push(current_visual_line);
                                     current_visual_line =
@@ -2687,6 +2785,8 @@ impl ShapeLine {
 
                                     number_of_blanks = 0;
                                     word_range_width = 0.;
+                                    padding_range = 0..0;
+                                    active_padding = SpanPadding::ZERO;
 
                                     fitting_start = WordGlyphPos::new(i, 0);
                                     total_line_count += 1;
@@ -2709,10 +2809,28 @@ impl ShapeLine {
 
                                 for (glyph_i, glyph) in word.glyphs.iter().enumerate() {
                                     let glyph_width = glyph.width(font_size);
-                                    if current_visual_line.w + (word_range_width + glyph_width)
+                                    // Padding transition per glyph (deferred state update)
+                                    let (glyph_pad_extra, glyph_new_pad_range, glyph_new_pad) = {
+                                        let (new_range, new_pad) =
+                                            attrs_list.padding_run(glyph.start);
+                                        if new_range != padding_range {
+                                            let extra = active_padding.end() + new_pad.start();
+                                            (extra, Some(new_range), Some(new_pad))
+                                        } else {
+                                            (0.0, None, None)
+                                        }
+                                    };
+                                    if current_visual_line.w
+                                        + (word_range_width + glyph_pad_extra + glyph_width)
                                         <= width_opt.unwrap_or(f32::INFINITY)
                                     {
-                                        word_range_width += glyph_width;
+                                        word_range_width += glyph_pad_extra + glyph_width;
+                                        if let (Some(nr), Some(np)) =
+                                            (glyph_new_pad_range, glyph_new_pad)
+                                        {
+                                            padding_range = nr;
+                                            active_padding = np;
+                                        }
                                     } else {
                                         self.add_to_visual_line(
                                             &mut current_visual_line,
@@ -2722,12 +2840,25 @@ impl ShapeLine {
                                             word_range_width,
                                             number_of_blanks,
                                         );
+                                        current_visual_line.w += active_padding.end();
                                         visual_lines.push(current_visual_line);
                                         current_visual_line =
                                             cached_visual_lines.pop().unwrap_or_default();
 
                                         number_of_blanks = 0;
+                                        padding_range = 0..0;
+                                        active_padding = SpanPadding::ZERO;
+                                        // Re-enter padding for the glyph starting the new line
                                         word_range_width = glyph_width;
+                                        {
+                                            let (new_range, new_pad) =
+                                                attrs_list.padding_run(glyph.start);
+                                            if new_range != padding_range {
+                                                word_range_width += new_pad.start();
+                                                padding_range = new_range;
+                                                active_padding = new_pad;
+                                            }
+                                        }
                                         fitting_start = WordGlyphPos::new(i, glyph_i);
                                         total_line_count += 1;
                                         total_line_height += line_height;
@@ -2779,10 +2910,13 @@ impl ShapeLine {
                                 }
 
                                 if !current_visual_line.ranges.is_empty() {
+                                    current_visual_line.w += active_padding.end();
                                     visual_lines.push(current_visual_line);
                                     current_visual_line =
                                         cached_visual_lines.pop().unwrap_or_default();
                                     number_of_blanks = 0;
+                                    padding_range = 0..0;
+                                    active_padding = SpanPadding::ZERO;
                                     total_line_count += 1;
                                     total_line_height += line_height;
                                     if try_ellipsize_last_line(
@@ -2810,6 +2944,16 @@ impl ShapeLine {
                                     fitting_start = WordGlyphPos::new(i + 1, 0);
                                 } else {
                                     word_range_width = word_width;
+                                    // Re-enter padding for the word starting the new line
+                                    if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                                        let (new_range, new_pad) =
+                                            attrs_list.padding_run(first_byte);
+                                        if new_range != padding_range {
+                                            word_range_width += new_pad.start();
+                                            padding_range = new_range;
+                                            active_padding = new_pad;
+                                        }
+                                    }
                                     fitting_start = WordGlyphPos::new(i, 0);
                                 }
                             }
@@ -2824,6 +2968,9 @@ impl ShapeLine {
                         );
                     }
                 }
+
+                // Close out the final padding run on the last visual line
+                current_visual_line.w += active_padding.end();
             }
         }
 
@@ -2928,6 +3075,10 @@ impl ShapeLine {
                                      decorations: &mut Vec<DecorationSpan>,
                                      max_ascent: &mut f32,
                                      max_descent: &mut f32| {
+                // Memoized padding run tracking (same pattern as color_run)
+                let mut pad_run_range: Range<usize> = 0..0;
+                let mut cur_padding = SpanPadding::ZERO;
+
                 for r in visual_line.ranges[range.clone()].iter() {
                     let is_ellipsis = r.span == ELLIPSIS_SPAN;
                     let span_words = self.get_span_words(r.span);
@@ -3004,6 +3155,39 @@ impl ShapeLine {
                                     color
                                 }
                             };
+                            // Padding-run transitions: advance x by end/start
+                            // padding at attrs-span boundaries.
+                            let mut glyph_padding_start = 0.0_f32;
+                            if !(pad_run_range.start <= glyph.start
+                                && glyph.start < pad_run_range.end)
+                            {
+                                // Exiting previous padding run
+                                if cur_padding != SpanPadding::ZERO {
+                                    let end_pad = cur_padding.end();
+                                    if self.rtl {
+                                        *x -= end_pad;
+                                    } else {
+                                        *x += end_pad;
+                                    }
+                                    // Set padding_end on previous glyph
+                                    if let Some(prev) = glyphs.last_mut() {
+                                        prev.padding_end = end_pad;
+                                    }
+                                }
+                                // Enter new padding run
+                                let (new_range, new_pad) = attrs_list.padding_run(glyph.start);
+                                pad_run_range = new_range;
+                                cur_padding = new_pad;
+                                if cur_padding != SpanPadding::ZERO {
+                                    let start_pad = cur_padding.start();
+                                    if self.rtl {
+                                        *x -= start_pad;
+                                    } else {
+                                        *x += start_pad;
+                                    }
+                                    glyph_padding_start = start_pad;
+                                }
+                            }
                             let mut layout_glyph = glyph.layout(
                                 glyph_font_size,
                                 glyph.metrics_opt.map(|x| x.line_height),
@@ -3033,6 +3217,7 @@ impl ShapeLine {
                                     layout_glyph.end = boundary;
                                 }
                             }
+                            layout_glyph.padding_start = glyph_padding_start;
                             glyphs.push(layout_glyph);
 
                             if deco_cursor >= deco_spans.len()
@@ -3073,9 +3258,23 @@ impl ShapeLine {
                                 *x += x_advance;
                             }
                             *y += y_advance;
-                            *max_ascent = max_ascent.max(glyph_font_size * glyph.ascent);
-                            *max_descent = max_descent.max(glyph_font_size * glyph.descent);
+                            *max_ascent =
+                                max_ascent.max(glyph_font_size * glyph.ascent + cur_padding.top());
+                            *max_descent = max_descent
+                                .max(glyph_font_size * glyph.descent + cur_padding.bottom());
                         }
+                    }
+                }
+                // Emit final padding.end() after the last glyph
+                if cur_padding != SpanPadding::ZERO {
+                    let end_pad = cur_padding.end();
+                    if self.rtl {
+                        *x -= end_pad;
+                    } else {
+                        *x += end_pad;
+                    }
+                    if let Some(last) = glyphs.last_mut() {
+                        last.padding_end = end_pad;
                     }
                 }
             };

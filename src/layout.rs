@@ -67,6 +67,10 @@ pub struct LayoutGlyph {
     pub optical_size: OpticalSize,
     /// Font variation axis settings
     pub font_variations: FontVariations,
+    /// Horizontal padding before this glyph (non-zero only on the first glyph of a padded span)
+    pub padding_start: f32,
+    /// Horizontal padding after this glyph (non-zero only on the last glyph of a padded span)
+    pub padding_end: f32,
 }
 
 /// A span of consecutive glyphs sharing the same text decoration.

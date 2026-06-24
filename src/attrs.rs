@@ -913,6 +913,20 @@ impl AttrsList {
         }
     }
 
+    /// The padding at `index` and a contiguous byte range it holds over, so a
+    /// caller walking mostly forward can resolve a run of glyphs with one
+    /// lookup.
+    ///
+    /// Same structure as [`Self::color_run`]: for an `index` in a gap between
+    /// spans the range starts at `index`.
+    pub(crate) fn padding_run(&self, index: usize) -> (Range<usize>, SpanPadding) {
+        match self.spans.overlapping(index..usize::MAX).next() {
+            Some((range, attrs)) if range.contains(&index) => (range.clone(), attrs.padding),
+            Some((range, _)) => (index..range.start, self.defaults.padding),
+            None => (index..usize::MAX, self.defaults.padding),
+        }
+    }
+
     /// Split attributes list at an offset
     #[allow(clippy::missing_panics_doc)]
     pub fn split_off(&mut self, index: usize) -> Self {
