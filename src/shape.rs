@@ -854,11 +854,12 @@ impl ShapeWord {
 
         if is_simple_ascii && !word.is_empty() && {
             let attrs_start = attrs_list.get_span(word_range.start);
-            attrs_list.spans_iter().all(|(other_range, other_attrs)| {
-                word_range.end <= other_range.start
-                    || other_range.end <= word_range.start
-                    || attrs_start.compatible(&other_attrs.as_attrs())
-            })
+            attrs_start.compatible(&attrs_list.defaults())
+                && attrs_list.spans_iter().all(|(other_range, other_attrs)| {
+                    word_range.end <= other_range.start
+                        || other_range.end <= word_range.start
+                        || attrs_start.compatible(&other_attrs.as_attrs())
+                })
         } {
             shaping.run(
                 &mut glyphs,
