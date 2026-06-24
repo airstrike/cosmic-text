@@ -81,7 +81,11 @@ impl LayoutRun<'_> {
             return results.into_iter();
         }
 
+        // Track the contiguous highlighted range plus the padding on its
+        // boundary glyphs so the highlight rect covers padded bounds.
         let mut range_opt: Option<(f32, f32)> = None;
+        let mut range_pad_start: f32 = 0.0;
+        let mut last_glyph_pad_end: f32 = 0.0;
 
         for glyph in self.glyphs {
             let cluster = &self.text[glyph.start..glyph.end];
@@ -97,15 +101,25 @@ impl LayoutRun<'_> {
                     && (cursor_end.line != line_i || c_start < cursor_end.index);
 
                 if is_selected {
-                    range_opt = Some(match range_opt {
-                        Some((min, max)) => (min.min(c_x), max.max(c_x + c_w)),
-                        None => (c_x, c_x + c_w),
-                    });
-                } else if let Some((min_x, max_x)) = range_opt.take() {
-                    let width = max_x - min_x;
-                    if width > 0.0 {
-                        results.push((min_x, width));
+                    match range_opt {
+                        Some((min, max)) => {
+                            range_opt = Some((min.min(c_x), max.max(c_x + c_w)));
+                        }
+                        None => {
+                            range_opt = Some((c_x, c_x + c_w));
+                            range_pad_start = glyph.padding_start;
+                        }
                     }
+                    last_glyph_pad_end = glyph.padding_end;
+                } else if let Some((min_x, max_x)) = range_opt.take() {
+                    let adj_min = min_x - range_pad_start;
+                    let adj_max = max_x + last_glyph_pad_end;
+                    let width = adj_max - adj_min;
+                    if width > 0.0 {
+                        results.push((adj_min, width));
+                    }
+                    range_pad_start = 0.0;
+                    last_glyph_pad_end = 0.0;
                 }
 
                 c_x += c_w;
@@ -114,9 +128,11 @@ impl LayoutRun<'_> {
 
         // Flush remaining highlighted region
         if let Some((min_x, max_x)) = range_opt {
-            let width = max_x - min_x;
+            let adj_min = min_x - range_pad_start;
+            let adj_max = max_x + last_glyph_pad_end;
+            let width = adj_max - adj_min;
             if width > 0.0 {
-                results.push((min_x, width));
+                results.push((adj_min, width));
             }
         }
 
