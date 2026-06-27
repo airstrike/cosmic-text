@@ -1,14 +1,14 @@
 use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping, SpanPadding};
 
 /// Verify that `SpanPadding` on a middle span affects glyph positioning,
-/// sets `padding_start`/`padding_end` on boundary glyphs, and increases
+/// sets `padding.start()`/`padding.end()` on boundary glyphs, and increases
 /// line height via max_ascent/max_descent.
 #[test]
 fn padding_offsets_and_line_height() {
     let mut font_system = FontSystem::new();
     let metrics = Metrics::new(16.0, 20.0);
     let attrs = Attrs::new();
-    let padded = attrs.clone().padding(SpanPadding::uniform(10.0));
+    let padded = attrs.clone().padding(SpanPadding::all(10.0));
 
     // --- Padded layout ---
     let (padded_ascent, padded_descent, first_code_x, first_pad_start, last_pad_end) = {
@@ -49,18 +49,18 @@ fn padding_offsets_and_line_height() {
             run.max_ascent,
             run.max_descent,
             first.x,
-            first.padding_start,
-            last.padding_end,
+            first.padding.start(),
+            last.padding.end(),
         )
     };
 
     assert_eq!(
         first_pad_start, 10.0,
-        "first glyph of padded span should have padding_start == 10.0"
+        "first glyph of padded span should have padding.start() == 10.0"
     );
     assert_eq!(
         last_pad_end, 10.0,
-        "last glyph of padded span should have padding_end == 10.0"
+        "last glyph of padded span should have padding.end() == 10.0"
     );
 
     // --- Unpadded layout for comparison ---
@@ -103,11 +103,11 @@ fn padding_offsets_and_line_height() {
         "max_descent should increase by ~10.0 from vertical padding, got diff={descent_diff}"
     );
 
-    // First "code" glyph should be offset by padding_start
+    // First "code" glyph should be offset by padding.start()
     let x_diff = first_code_x - plain_first_code_x;
     assert!(
         x_diff >= 9.9 && x_diff <= 10.1,
-        "first 'code' glyph should be offset by ~10.0 from padding_start, got diff={x_diff}"
+        "first 'code' glyph should be offset by ~10.0 from padding.start(), got diff={x_diff}"
     );
 }
 
@@ -130,13 +130,15 @@ fn unpadded_glyphs_have_zero_padding() {
 
     for glyph in run.glyphs {
         assert_eq!(
-            glyph.padding_start, 0.0,
-            "unpadded glyph at byte {} should have padding_start == 0.0",
+            glyph.padding.start(),
+            0.0,
+            "unpadded glyph at byte {} should have padding.start() == 0.0",
             glyph.start
         );
         assert_eq!(
-            glyph.padding_end, 0.0,
-            "unpadded glyph at byte {} should have padding_end == 0.0",
+            glyph.padding.end(),
+            0.0,
+            "unpadded glyph at byte {} should have padding.end() == 0.0",
             glyph.start
         );
     }
@@ -178,9 +180,9 @@ fn padded_spans_never_shrink_line_height() {
 
     let code_padded = Attrs::new()
         .family(cosmic_text::Family::Monospace)
-        .padding(SpanPadding::symmetric(1.0, 6.0));
+        .padding(SpanPadding::new(1.0, 1.0, 6.0, 6.0));
 
-    let formula_padded = Attrs::new().padding(SpanPadding::symmetric(4.0, 3.0));
+    let formula_padded = Attrs::new().padding(SpanPadding::new(4.0, 4.0, 3.0, 3.0));
 
     // Baseline: plain text only
     let (plain_ascent, plain_descent) = line_height(&mut font_system, "Hello world", &plain, None);
@@ -249,7 +251,7 @@ fn padded_spans_never_shrink_line_height() {
     let small_code = Attrs::new()
         .family(cosmic_text::Family::Monospace)
         .metrics(Metrics::new(14.0, 14.0))
-        .padding(SpanPadding::symmetric(1.0, 6.0));
+        .padding(SpanPadding::new(1.0, 1.0, 6.0, 6.0));
 
     let (small_ascent, small_descent) = line_height(
         &mut font_system,
@@ -288,7 +290,7 @@ fn padded_spans_never_shrink_line_height() {
     let iced_code = Attrs::new()
         .family(cosmic_text::Family::Monospace)
         .metrics(Metrics::new(14.0, 14.0 * 1.6))
-        .padding(SpanPadding::symmetric(1.0, 6.0));
+        .padding(SpanPadding::new(1.0, 1.0, 6.0, 6.0));
     let iced_metrics = Metrics::new(16.0, 16.0 * 1.6);
 
     let mut buf = Buffer::new(&mut font_system, iced_metrics);

@@ -714,8 +714,7 @@ impl ShapeGlyph {
             cache_key_flags: self.cache_key_flags,
             optical_size: self.optical_size,
             font_variations: self.font_variations.clone(),
-            padding_start: 0.0,
-            padding_end: 0.0,
+            padding: SpanPadding::ZERO,
         }
     }
 
@@ -3170,9 +3169,8 @@ impl ShapeLine {
                                     } else {
                                         *x += end_pad;
                                     }
-                                    // Set padding_end on previous glyph
                                     if let Some(prev) = glyphs.last_mut() {
-                                        prev.padding_end = end_pad;
+                                        prev.padding.end = end_pad;
                                     }
                                 }
                                 // Enter new padding run
@@ -3218,7 +3216,12 @@ impl ShapeLine {
                                     layout_glyph.end = boundary;
                                 }
                             }
-                            layout_glyph.padding_start = glyph_padding_start;
+                            layout_glyph.padding = SpanPadding::new(
+                                cur_padding.top(),
+                                cur_padding.bottom(),
+                                glyph_padding_start,
+                                0.0,
+                            );
                             glyphs.push(layout_glyph);
 
                             if deco_cursor >= deco_spans.len()
@@ -3275,7 +3278,7 @@ impl ShapeLine {
                         *x += end_pad;
                     }
                     if let Some(last) = glyphs.last_mut() {
-                        last.padding_end = end_pad;
+                        last.padding.end = end_pad;
                     }
                 }
             };

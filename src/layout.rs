@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use core::fmt::Display;
-
 use core::ops::Range;
+
+use crate::SpanPadding;
 
 use crate::{
     math, CacheKey, CacheKeyFlags, Color, FontVariations, GlyphDecorationData, LayoutRun,
@@ -67,10 +68,9 @@ pub struct LayoutGlyph {
     pub optical_size: OpticalSize,
     /// Font variation axis settings
     pub font_variations: FontVariations,
-    /// Horizontal padding before this glyph (non-zero only on the first glyph of a padded span)
-    pub padding_start: f32,
-    /// Horizontal padding after this glyph (non-zero only on the last glyph of a padded span)
-    pub padding_end: f32,
+    /// Span padding. Horizontal (start/end) is non-zero only on boundary
+    /// glyphs; vertical (top/bottom) is set on every glyph in a padded span.
+    pub padding: SpanPadding,
 }
 
 /// A span of consecutive glyphs sharing the same text decoration.

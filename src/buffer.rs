@@ -107,10 +107,10 @@ impl LayoutRun<'_> {
                         }
                         None => {
                             range_opt = Some((c_x, c_x + c_w));
-                            range_pad_start = glyph.padding_start;
+                            range_pad_start = glyph.padding.start();
                         }
                     }
-                    last_glyph_pad_end = glyph.padding_end;
+                    last_glyph_pad_end = glyph.padding.end();
                 } else if let Some((min_x, max_x)) = range_opt.take() {
                     let adj_min = min_x - range_pad_start;
                     let adj_max = max_x + last_glyph_pad_end;

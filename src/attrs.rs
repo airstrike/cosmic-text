@@ -359,22 +359,12 @@ impl SpanPadding {
     }
 
     /// Create padding with the same value on all four sides.
-    pub const fn uniform(px: f32) -> Self {
+    pub const fn all(px: f32) -> Self {
         Self {
             top: px,
             bottom: px,
             start: px,
             end: px,
-        }
-    }
-
-    /// Create padding with one value for top/bottom and another for start/end.
-    pub const fn symmetric(vertical: f32, horizontal: f32) -> Self {
-        Self {
-            top: vertical,
-            bottom: vertical,
-            start: horizontal,
-            end: horizontal,
         }
     }
 
