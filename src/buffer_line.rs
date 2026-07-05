@@ -211,6 +211,21 @@ impl BufferLine {
         }
     }
 
+    /// The line height implied by this line's paragraph default metrics,
+    /// falling back to `fallback` when the line sets no explicit metrics.
+    ///
+    /// This is the floor for per-span `line_height` overrides: an inline span
+    /// with smaller metrics (e.g. a 14px code chip on a 16px line) may not
+    /// shrink the line below its paragraph's own text height, but a paragraph
+    /// that legitimately sets smaller default metrics (a code block) is
+    /// honored rather than clamped up to the buffer default.
+    pub fn default_line_height(&self, fallback: f32) -> f32 {
+        self.attrs_list
+            .defaults()
+            .metrics_opt
+            .map_or(fallback, |m| crate::Metrics::from(m).line_height)
+    }
+
     /// Get the top margin in pixels
     pub const fn margin_top(&self) -> f32 {
         self.margin_top

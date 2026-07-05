@@ -299,9 +299,8 @@ impl<'b> Iterator for LayoutRunIter<'b> {
             while let Some(layout_line) = layout.get(self.layout_i) {
                 self.layout_i += 1;
 
-                let line_height = layout_line
-                    .line_height_opt
-                    .map_or(self.line_height, |h| h.max(self.line_height));
+                let floor = line.default_line_height(self.line_height);
+                let line_height = layout_line.line_height_opt.map_or(floor, |h| h.max(floor));
                 self.total_height += line_height;
 
                 let line_top = self.line_top - self.scroll;
@@ -591,13 +590,12 @@ impl Buffer {
             } else {
                 while line_i > self.scroll.line {
                     line_i -= 1;
+                    let floor = self.lines[line_i].default_line_height(metrics.line_height);
                     let layout = self
                         .line_layout(font_system, line_i)
                         .expect("shape_until_cursor failed to scroll forwards");
                     for layout_line in layout {
-                        total_height += layout_line
-                            .line_height_opt
-                            .map_or(metrics.line_height, |h| h.max(metrics.line_height));
+                        total_height += layout_line.line_height_opt.map_or(floor, |h| h.max(floor));
                     }
                     total_height +=
                         self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
@@ -675,12 +673,12 @@ impl Buffer {
             while self.scroll.vertical < 0.0 {
                 if self.scroll.line > 0 {
                     let line_i = self.scroll.line - 1;
+                    let floor = self.lines[line_i].default_line_height(metrics.line_height);
                     if let Some(layout) = self.line_layout(font_system, line_i) {
                         let mut layout_height = 0.0;
                         for layout_line in layout {
-                            layout_height += layout_line
-                                .line_height_opt
-                                .map_or(metrics.line_height, |h| h.max(metrics.line_height));
+                            layout_height +=
+                                layout_line.line_height_opt.map_or(floor, |h| h.max(floor));
                         }
                         layout_height +=
                             self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
@@ -717,15 +715,14 @@ impl Buffer {
 
                 let line_margins =
                     self.lines[line_i].margin_top() + self.lines[line_i].margin_bottom();
+                let floor = self.lines[line_i].default_line_height(metrics.line_height);
                 let mut layout_height = line_margins;
                 total_height += line_margins;
                 let layout = self
                     .line_layout(font_system, line_i)
                     .expect("shape_until_scroll invalid line");
                 for layout_line in layout {
-                    let line_height = layout_line
-                        .line_height_opt
-                        .map_or(metrics.line_height, |h| h.max(metrics.line_height));
+                    let line_height = layout_line.line_height_opt.map_or(floor, |h| h.max(floor));
                     layout_height += line_height;
                     total_height += line_height;
                 }
