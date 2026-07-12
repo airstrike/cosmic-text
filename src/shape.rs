@@ -1798,6 +1798,7 @@ impl ShapeLine {
         current_visual_line: &mut VisualLine,
         font_size: f32,
         spans: &[ShapeSpan],
+        attrs_list: &AttrsList,
         start_opt: Option<SpanWordGlyphPos>,
         rtl: bool,
         width_opt: Option<f32>,
@@ -1807,6 +1808,15 @@ impl ShapeLine {
     ) {
         let check_ellipsizing = matches!(ellipsize, Ellipsize::Start(_) | Ellipsize::End(_))
             && width_opt.is_some_and(|w| w.is_finite());
+
+        // Span padding advances layout during positioning, so the fit
+        // math must count it too or ellipsized lines overflow their
+        // width. Track padding-run transitions like the wrapping pass;
+        // crossing a run boundary contributes the trailing pad of the
+        // active run plus the leading pad of the new one (sides swap
+        // with the physical iteration direction).
+        let mut padding_range: core::ops::Range<usize> = 0..0;
+        let mut active_padding = SpanPadding::ZERO;
 
         let max_width = width_opt.unwrap_or(f32::INFINITY);
         let span_count = spans.len();
@@ -1882,12 +1892,31 @@ impl ShapeLine {
                     word.width(font_size)
                 };
 
+                let pad_extra = if check_ellipsizing {
+                    if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                        let (new_range, new_pad) = attrs_list.padding_run(first_byte);
+                        if new_range != padding_range {
+                            if word_forward {
+                                active_padding.end() + new_pad.start()
+                            } else {
+                                active_padding.start() + new_pad.end()
+                            }
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+
                 let overflowing = {
                     // only check this if we're ellipsizing
                     check_ellipsizing
                         && (
                             // if this  word doesn't fit, then we have an overflow
-                            (total_w + word_range_width + word_width > max_width)
+                            (total_w + word_range_width + pad_extra + word_width > max_width)
                                 || (Self::remaining_content_exceeds(
                                     spans,
                                     font_size,
@@ -1900,7 +1929,7 @@ impl ShapeLine {
                                     start.span,
                                     span_count,
                                     ellipsis_w,
-                                ) && total_w + word_range_width + word_width + ellipsis_w
+                                ) && total_w + word_range_width + pad_extra + word_width + ellipsis_w
                                     > max_width)
                         )
                 };
@@ -1917,7 +1946,7 @@ impl ShapeLine {
                         word_idx,
                         direction,
                         congruent,
-                        total_w + word_range_width,
+                        total_w + word_range_width + pad_extra,
                         available,
                         word_forward,
                     );
@@ -1955,7 +1984,7 @@ impl ShapeLine {
                         span_index,
                         start_pos,
                         end_pos,
-                        word_range_width + glyphs_w,
+                        word_range_width + if glyphs_w > 0.0 { pad_extra } else { 0.0 } + glyphs_w,
                         number_of_blanks,
                     );
 
@@ -1964,7 +1993,16 @@ impl ShapeLine {
                     break 'outer;
                 }
 
-                word_range_width += word_width;
+                word_range_width += pad_extra + word_width;
+                if check_ellipsizing {
+                    if let Some(first_byte) = word.glyphs.first().map(|g| g.start) {
+                        let (new_range, new_pad) = attrs_list.padding_run(first_byte);
+                        if new_range != padding_range {
+                            padding_range = new_range;
+                            active_padding = new_pad;
+                        }
+                    }
+                }
                 if word.blank {
                     number_of_blanks += 1;
                 }
@@ -2034,6 +2072,7 @@ impl ShapeLine {
         current_visual_line: &mut VisualLine,
         font_size: f32,
         spans: &[ShapeSpan],
+        attrs_list: &AttrsList,
         start_opt: Option<SpanWordGlyphPos>,
         rtl: bool,
         width: f32,
@@ -2049,6 +2088,7 @@ impl ShapeLine {
                 &mut test_line,
                 font_size,
                 spans,
+                attrs_list,
                 start_opt,
                 rtl,
                 Some(width),
@@ -2067,6 +2107,7 @@ impl ShapeLine {
             &mut starting_line,
             font_size,
             spans,
+            attrs_list,
             start_opt,
             rtl,
             Some(width / 2.0),
@@ -2098,6 +2139,7 @@ impl ShapeLine {
                     &mut ending_line,
                     font_size,
                     spans,
+                    attrs_list,
                     Some(start),
                     rtl,
                     Some((width - starting_line.w - ellipsis_w).max(0.0)),
@@ -2267,6 +2309,7 @@ impl ShapeLine {
         current_visual_line: &mut VisualLine,
         font_size: f32,
         spans: &[ShapeSpan],
+        attrs_list: &AttrsList,
         start_opt: Option<SpanWordGlyphPos>,
         rtl: bool,
         width_opt: Option<f32>,
@@ -2280,6 +2323,7 @@ impl ShapeLine {
                     current_visual_line,
                     font_size,
                     spans,
+                    attrs_list,
                     start_opt,
                     rtl,
                     width_opt,
@@ -2302,6 +2346,7 @@ impl ShapeLine {
                     current_visual_line,
                     font_size,
                     spans,
+                    attrs_list,
                     start_opt,
                     rtl,
                     width,
@@ -2314,6 +2359,7 @@ impl ShapeLine {
                     current_visual_line,
                     font_size,
                     spans,
+                    attrs_list,
                     start_opt,
                     rtl,
                     width_opt,
@@ -2394,6 +2440,7 @@ impl ShapeLine {
                 &mut current_visual_line,
                 font_size,
                 &self.spans,
+                attrs_list,
                 None,
                 self.rtl,
                 width_opt,
@@ -2436,6 +2483,7 @@ impl ShapeLine {
                         current_visual_line,
                         font_size,
                         &self.spans,
+                        attrs_list,
                         start_opt,
                         self.rtl,
                         width_opt,
