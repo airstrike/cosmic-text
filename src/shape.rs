@@ -1823,11 +1823,33 @@ impl ShapeLine {
 
         let mut total_w: f32 = 0.0;
 
-        let start = if let Some(s) = start_opt {
+        let mut start = if let Some(s) = start_opt {
             s
         } else {
             SpanWordGlyphPos::ZERO
         };
+
+        // A soft-wrapped line never begins with visible whitespace:
+        // when the wrap pass hands off mid-paragraph (End ellipsis on
+        // the last line), it may point at the blank the wrap stopped
+        // on. Skip leading blanks so the last line aligns with the
+        // wrapped lines above it.
+        if check_ellipsizing
+            && matches!(direction, LayoutDirection::Forward)
+            && start_opt.is_some()
+            && start.glyph == 0
+        {
+            while let Some(word) = spans
+                .get(start.span)
+                .and_then(|span| span.words.get(start.word))
+            {
+                if word.blank && rtl == spans[start.span].level.is_rtl() {
+                    start.word += 1;
+                } else {
+                    break;
+                }
+            }
+        }
 
         let span_indices: Vec<usize> = if matches!(direction, LayoutDirection::Forward) {
             (start.span..spans.len()).collect()
